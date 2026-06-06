@@ -209,6 +209,8 @@
     <label for="gpx-text">Methode B: GPX-Inhalt kopieren & einfügen (für Smartphones)</label>
     <textarea id="gpx-text" placeholder="Öffne die .gpx Datei in einer Text-App auf deinem Handy, kopiere den gesamten XML-Inhalt und füge ihn hier ein..." rows="6" style="width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 12px; border-radius: 8px; font-size: 13px; box-sizing: border-box; outline: none; resize: vertical; font-family: monospace; margin-top: 5px;"></textarea>
     
+    <button id="clear-btn" class="btn" style="background-color: var(--error); margin-top: 15px; font-size: 14px; padding: 8px 12px;">Aktuelle Route entfernen</button>
+    
     <div id="status-msg" class="status-msg"></div>
   </div>
 
@@ -219,12 +221,14 @@
   // State Variables
   var trackPoints = [];
   var gpxUploaded = false;
+  var gpxCleared = false;
 
   // UI elements
   var dropzone = document.getElementById("dropzone");
   var gpxInput = document.getElementById("gpx-file");
   var dropzoneText = document.getElementById("dropzone-text");
   var gpxTextArea = document.getElementById("gpx-text");
+  var clearBtn = document.getElementById("clear-btn");
   var statusMsg = document.getElementById("status-msg");
   var saveBtn = document.getElementById("save-btn");
 
@@ -280,7 +284,21 @@
       saveBtn.disabled = false;
       trackPoints = [];
       gpxUploaded = false;
+      gpxCleared = false;
     }
+  });
+
+  // Handle clearing the GPX route
+  clearBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    trackPoints = [];
+    gpxUploaded = false;
+    gpxCleared = true;
+    gpxInput.value = "";
+    gpxTextArea.value = "";
+    dropzoneText.innerText = "Klicke zum Auswählen oder ziehe eine GPX-Datei hierher";
+    showStatus("Route entfernt. Klicke auf 'Speichern', um die Änderung auf der Uhr zu übernehmen.", "success");
+    saveBtn.disabled = false;
   });
 
   // Parse GPX from raw string
@@ -329,6 +347,7 @@
       trackPoints = simplifyDouglasPeucker(rawPoints, 0.00015);
       
       gpxUploaded = true;
+      gpxCleared = false;
       showStatus("GPX-Daten erfolgreich geladen! " + rawPoints.length + " Punkte wurden auf " + trackPoints.length + " reduziert.", "success");
       saveBtn.disabled = false;
     } catch (err) {
@@ -393,7 +412,9 @@
     var settings = {
       gpsInterval: gpsInterval
     };
-    if (gpxUploaded) {
+    if (gpxCleared) {
+      settings.gpxTrack = [];
+    } else if (gpxUploaded) {
       settings.gpxTrack = trackPoints;
     }
     
