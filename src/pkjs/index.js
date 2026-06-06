@@ -96,7 +96,8 @@ Pebble.addEventListener('ready', function() {
 // Settings config page trigger
 Pebble.addEventListener('showConfiguration', function() {
   // We use a query parameter cache-buster to prevent mobile WebViews from caching config.html
-  Pebble.openURL('https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config.html?v=' + Date.now());
+  var interval = localStorage.getItem('gpsInterval') || '5';
+  Pebble.openURL('https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config.html?v=' + Date.now() + '&interval=' + interval);
 });
 
 // Settings config page closed
@@ -109,16 +110,18 @@ Pebble.addEventListener('webviewclosed', function(e) {
       gpsInterval = settings.gpsInterval;
       localStorage.setItem('gpsInterval', gpsInterval);
       
-      gpxTrack = settings.gpxTrack || [];
-      localStorage.setItem('gpxTrack', JSON.stringify(gpxTrack));
-      
-      // Reset navigation haptics states
-      lastVibratedTurnIdx = -1;
-      hasVibratedOffRoute = false;
-      
-      // Cache tiles in background
-      if (gpxTrack.length > 0) {
-        cacheTrackTiles(gpxTrack);
+      if (settings.gpxTrack !== undefined) {
+        gpxTrack = settings.gpxTrack;
+        localStorage.setItem('gpxTrack', JSON.stringify(gpxTrack));
+        
+        // Reset navigation haptics states
+        lastVibratedTurnIdx = -1;
+        hasVibratedOffRoute = false;
+        
+        // Cache tiles in background
+        if (gpxTrack.length > 0) {
+          cacheTrackTiles(gpxTrack);
+        }
       }
       
       // Restart GPS tracking with new interval

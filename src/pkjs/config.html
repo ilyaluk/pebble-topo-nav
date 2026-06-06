@@ -212,12 +212,13 @@
     <div id="status-msg" class="status-msg"></div>
   </div>
 
-  <button id="save-btn" class="btn" disabled>Speichern</button>
+  <button id="save-btn" class="btn">Speichern</button>
 </div>
 
 <script>
   // State Variables
   var trackPoints = [];
+  var gpxUploaded = false;
 
   // UI elements
   var dropzone = document.getElementById("dropzone");
@@ -276,8 +277,9 @@
     } else {
       statusMsg.className = "status-msg";
       statusMsg.innerText = "";
-      saveBtn.disabled = true;
+      saveBtn.disabled = false;
       trackPoints = [];
+      gpxUploaded = false;
     }
   });
 
@@ -326,6 +328,7 @@
       // Simplify track using Douglas-Peucker to save memory (15m tolerance = 0.00015)
       trackPoints = simplifyDouglasPeucker(rawPoints, 0.00015);
       
+      gpxUploaded = true;
       showStatus("GPX-Daten erfolgreich geladen! " + rawPoints.length + " Punkte wurden auf " + trackPoints.length + " reduziert.", "success");
       saveBtn.disabled = false;
     } catch (err) {
@@ -388,14 +391,34 @@
     var gpsInterval = parseInt(document.getElementById("gps-interval").value);
     
     var settings = {
-      gpsInterval: gpsInterval,
-      gpxTrack: trackPoints
+      gpsInterval: gpsInterval
     };
+    if (gpxUploaded) {
+      settings.gpxTrack = trackPoints;
+    }
     
     // Redirect to pebblejs schema to pass data to phone companion
     var location = "pebblejs://close#" + encodeURIComponent(JSON.stringify(settings));
     window.location.href = location;
   });
+
+  // Load current settings from URL query parameters
+  function getQueryParam(name) {
+    var query = window.location.search.substring(1);
+    var vars = query.split("&");
+    for (var i = 0; i < vars.length; i++) {
+      var pair = vars[i].split("=");
+      if (decodeURIComponent(pair[0]) === name) {
+        return decodeURIComponent(pair[1]);
+      }
+    }
+    return null;
+  }
+  
+  var initialInterval = getQueryParam("interval");
+  if (initialInterval) {
+    document.getElementById("gps-interval").value = initialInterval;
+  }
 </script>
 
 </body>
