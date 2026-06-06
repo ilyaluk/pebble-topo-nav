@@ -306,10 +306,13 @@
       for (var i = 0; i < trkpts.length; i++) {
         var latVal = trkpts[i].getAttribute("lat");
         var lonVal = trkpts[i].getAttribute("lon");
+        var eleEl = trkpts[i].getElementsByTagName("ele")[0];
+        var eleVal = eleEl ? parseFloat(eleEl.textContent) : 0;
         if (latVal && lonVal) {
           rawPoints.push({
             lat: parseFloat(latVal),
-            lon: parseFloat(lonVal)
+            lon: parseFloat(lonVal),
+            ele: eleVal
           });
         }
       }
