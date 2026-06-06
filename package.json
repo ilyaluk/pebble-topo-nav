@@ -1,0 +1,38 @@
+{
+  "name": "pebble-topo-nav",
+  "author": "Antigravity",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "TopoNav",
+    "uuid": "4f84c311-665e-4ad2-abdf-cbb612f0e4b7",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["aplite", "basalt", "chalk", "emery"],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "MAP_DATA_CHUNK",
+      "CHUNK_INDEX",
+      "TOTAL_CHUNKS",
+      "NAV_INSTRUCTION",
+      "NAV_DISTANCE",
+      "NAV_BEARING",
+      "ZOOM_LEVEL",
+      "GPS_CONNECTED",
+      "OFF_ROUTE",
+      "REQUEST_MAP_UPDATE",
+      "SPEED",
+      "ALTITUDE",
+      "TRIP_DISTANCE",
+      "VIBRATE_ALERT"
+    ],
+    "resources": {
+      "media": []
+    },
+    "capabilities": ["configurable"]
+  }
+}

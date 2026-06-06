@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TopoNav Einstellungen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --text-color: #e0e0e0;
+      --text-muted: #a0a0a0;
+      --primary: #ff5722;
+      --primary-hover: #f4511e;
+      --border-color: #333333;
+      --success: #4caf50;
+      --error: #f44336;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--primary);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 0;
+      margin-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    select, input[type="file"] {
+      width: 100%;
+      background-color: #2b2b2b;
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus {
+      border-color: var(--primary);
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: 8px;
+      padding: 30px 20px;
+      text-align: center;
+      cursor: pointer;
+      background-color: rgba(255, 255, 255, 0.02);
+      transition: background-color 0.2s, border-color 0.2s;
+    }
+
+    .dropzone.dragover {
+      background-color: rgba(255, 87, 34, 0.05);
+      border-color: var(--primary);
+    }
+
+    .dropzone p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .dropzone span {
+      display: block;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 20px;
+    }
+
+    .btn:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn:disabled {
+      background-color: #444444;
+      color: #888888;
+      cursor: not-allowed;
+    }
+
+    .status-msg {
+      font-size: 13px;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .status-msg.success {
+      background-color: rgba(76, 175, 80, 0.15);
+      color: #81c784;
+      border: 1px solid rgba(76, 175, 80, 0.3);
+      display: block;
+    }
+
+    .status-msg.error {
+      background-color: rgba(244, 67, 54, 0.15);
+      color: #e57373;
+      border: 1px solid rgba(244, 67, 54, 0.3);
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>TopoNav Einstellungen</h1>
+
+  <!-- General Settings -->
+  <div class="card">
+    <div class="card-title">Allgemein</div>
+    
+    <label for="gps-interval">GPS-Aktualisierungsintervall</label>
+    <select id="gps-interval">
+      <option value="5" selected>5 Sekunden (Präzise, mehr Akku)</option>
+      <option value="10">10 Sekunden (Ausgeglichen)</option>
+      <option value="30">30 Sekunden (Stromsparend)</option>
+    </select>
+  </div>
+
+  <!-- GPX Import -->
+  <div class="card">
+    <div class="card-title">GPX-Route</div>
+    
+    <div id="dropzone" class="dropzone">
+      <p id="dropzone-text">Klicke zum Auswählen oder ziehe eine GPX-Datei hierher</p>
+      <span>Erlaubte Formate: .gpx</span>
+      <input type="file" id="gpx-file" accept=".gpx" style="display: none;">
+    </div>
+    
+    <div id="status-msg" class="status-msg"></div>
+  </div>
+
+  <button id="save-btn" class="btn" disabled>Speichern</button>
+</div>
+
+<script>
+  // State Variables
+  var trackPoints = [];
+
+  // UI elements
+  var dropzone = document.getElementById("dropzone");
+  var gpxInput = document.getElementById("gpx-file");
+  var dropzoneText = document.getElementById("dropzone-text");
+  var statusMsg = document.getElementById("status-msg");
+  var saveBtn = document.getElementById("save-btn");
+
+  // Handle Drag & Drop
+  dropzone.addEventListener("click", function() {
+    gpxInput.click();
+  });
+  dropzone.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", function() {
+    dropzone.classList.remove("dragover");
+  });
+  dropzone.addEventListener("drop", function(e) {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
+  gpxInput.addEventListener("change", function() {
+    if (gpxInput.files.length > 0) {
+      handleFile(gpxInput.files[0]);
+    }
+  });
+
+  // Load and parse the GPX file
+  function handleFile(file) {
+    if (!file.name.endsWith(".gpx")) {
+      showStatus("Fehler: Bitte wähle eine valide .gpx Datei.", "error");
+      return;
+    }
+    dropzoneText.innerText = "Lese " + file.name + "...";
+    
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var parser = new DOMParser();
+        var xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+        var trkpts = xmlDoc.getElementsByTagName("trkpt");
+        
+        if (trkpts.length === 0) {
+          showStatus("Fehler: Keine Trackpoints in der GPX-Datei gefunden.", "error");
+          dropzoneText.innerText = "Datei hochladen";
+          return;
+        }
+
+        var rawPoints = [];
+        for (var i = 0; i < trkpts.length; i++) {
+          rawPoints.push({
+            lat: parseFloat(trkpts[i].getAttribute("lat")),
+            lon: parseFloat(trkpts[i].getAttribute("lon"))
+          });
+        }
+
+        // Simplify track using Douglas-Peucker to save memory (15m tolerance = 0.00015)
+        trackPoints = simplifyDouglasPeucker(rawPoints, 0.00015);
+        
+        showStatus("GPX-Datei geladen. " + rawPoints.length + " Punkte auf " + trackPoints.length + " vereinfacht.", "success");
+        dropzoneText.innerText = file.name + " (" + trackPoints.length + " Punkte)";
+        
+        saveBtn.disabled = false;
+      } catch (err) {
+        showStatus("Fehler beim Parsen der GPX-Datei: " + err.message, "error");
+        dropzoneText.innerText = "Datei hochladen";
+        saveBtn.disabled = true;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Ramer-Douglas-Peucker Simplification
+  function getSquareSegmentDistance(p, p1, p2) {
+    var x = p1.lon, y = p1.lat;
+    var dx = p2.lon - x, dy = p2.lat - y;
+    if (dx !== 0 || dy !== 0) {
+      var t = ((p.lon - x) * dx + (p.lat - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) {
+        x = p2.lon;
+        y = p2.lat;
+      } else if (t > 0) {
+        x += dx * t;
+      }
+    }
+    dx = p.lon - x;
+    dy = p.lat - y;
+    return dx * dx + dy * dy;
+  }
+
+  function simplifyDPStep(points, first, last, sqTolerance, simplified) {
+    var maxSqDist = sqTolerance;
+    var index = -1;
+    for (var i = first + 1; i < last; i++) {
+      var sqDist = getSquareSegmentDistance(points[i], points[first], points[last]);
+      if (sqDist > maxSqDist) {
+        index = i;
+        maxSqDist = sqDist;
+      }
+    }
+    if (maxSqDist > sqTolerance) {
+      if (index - first > 1) simplifyDPStep(points, first, index, sqTolerance, simplified);
+      simplified.push(points[index]);
+      if (last - index > 1) simplifyDPStep(points, index, last, sqTolerance, simplified);
+    }
+  }
+
+  function simplifyDouglasPeucker(points, tolerance) {
+    if (points.length <= 2) return points;
+    var sqTolerance = tolerance * tolerance;
+    var simplified = [points[0]];
+    simplifyDPStep(points, 0, points.length - 1, sqTolerance, simplified);
+    simplified.push(points[points.length - 1]);
+    return simplified;
+  }
+
+  function showStatus(msg, type) {
+    statusMsg.innerText = msg;
+    statusMsg.className = "status-msg " + type;
+  }
+
+  // Submit and Close WebView
+  saveBtn.addEventListener("click", function() {
+    var gpsInterval = parseInt(document.getElementById("gps-interval").value);
+    
+    var settings = {
+      gpsInterval: gpsInterval,
+      gpxTrack: trackPoints
+    };
+    
+    // Redirect to pebblejs schema to pass data to phone companion
+    var location = "pebblejs://close#" + encodeURIComponent(JSON.stringify(settings));
+    window.location.href = location;
+  });
+</script>
+
+</body>
+</html>
