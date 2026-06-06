@@ -14,6 +14,13 @@ var gpsWatchId = null;
 var lastVibratedTurnIdx = -1;
 var hasVibratedOffRoute = false;
 
+// Average speed & walked route state
+var totalMovingDistance = 0;
+var totalMovingTimeSec = 0;
+var lastPositionTime = null;
+var lastPositionCoords = null;
+var closestTrackPointIdx = -1;
+
 // Utility: Convert ArrayBuffer to Base64 string
 function arrayBufferToBase64(buffer) {
   var binary = '';
@@ -161,9 +168,35 @@ function restartGPSTracking() {
 }
 
 function onGPSSuccess(position) {
+  var lat = position.coords.latitude;
+  var lon = position.coords.longitude;
+  var now = Date.now();
+  
+  if (lastPositionTime && lastPositionCoords) {
+    var dt = (now - lastPositionTime) / 1000;
+    if (dt > 0.5) {
+      var ds = haversineDistance(
+        lastPositionCoords.latitude,
+        lastPositionCoords.longitude,
+        lat,
+        lon
+      );
+      
+      var currentSpeed = position.coords.speed !== null && position.coords.speed !== undefined ? position.coords.speed : (ds / dt);
+      
+      if (currentSpeed > 0.5 && ds > 0.5) {
+        totalMovingDistance += ds;
+        totalMovingTimeSec += dt;
+      }
+    }
+  }
+  
+  lastPositionTime = now;
+  lastPositionCoords = { latitude: lat, longitude: lon };
+
   currentLocation = {
-    lat: position.coords.latitude,
-    lon: position.coords.longitude,
+    lat: lat,
+    lon: lon,
     speed: position.coords.speed || 0,
     altitude: position.coords.altitude || 0
   };
@@ -191,10 +224,10 @@ function updateWatchNavigationAndMap() {
     return;
   }
   
+  var avgSpeedKmh = totalMovingTimeSec > 0 ? (totalMovingDistance / totalMovingTimeSec) * 3.6 : 0;
   var payload = {
     GPS_CONNECTED: 1,
-    SPEED: (currentLocation.speed * 3.6).toFixed(1) + ' km/h', // m/s to km/h
-    ALTITUDE: currentLocation.altitude.toFixed(0) + ' m'
+    AVG_SPEED: avgSpeedKmh.toFixed(1) + ' km/h'
   };
 
   var offRoute = false;
@@ -218,8 +251,35 @@ function updateWatchNavigationAndMap() {
       }
     }
     
-    // Check if user is Off-Route (> 40 meters)
-    if (minDist > 40) {
+    // Save closest index for map rendering (gray out walked part)
+    closestTrackPointIdx = closestIdx;
+    
+    // Calculate elevation stats based on GPX track elevations
+    var gainMade = 0;
+    var lossMade = 0;
+    for (var i = 0; i < closestIdx; i++) {
+      if (gpxTrack[i].ele !== undefined && gpxTrack[i+1].ele !== undefined) {
+        var diff = gpxTrack[i+1].ele - gpxTrack[i].ele;
+        if (diff > 0) gainMade += diff;
+        else lossMade += Math.abs(diff);
+      }
+    }
+    
+    var gainRemaining = 0;
+    var lossRemaining = 0;
+    for (var i = closestIdx; i < gpxTrack.length - 1; i++) {
+      if (gpxTrack[i].ele !== undefined && gpxTrack[i+1].ele !== undefined) {
+        var diff = gpxTrack[i+1].ele - gpxTrack[i].ele;
+        if (diff > 0) gainRemaining += diff;
+        else lossRemaining += Math.abs(diff);
+      }
+    }
+    
+    payload.ELEVATION_GAIN = Math.round(gainMade) + 'm / ' + Math.round(gainRemaining) + 'm';
+    payload.ELEVATION_LOSS = Math.round(lossMade) + 'm / ' + Math.round(lossRemaining) + 'm';
+    
+    // Check if user is Off-Route (> 50 meters)
+    if (minDist > 50) {
       offRoute = true;
       payload.OFF_ROUTE = 1;
       payload.NAV_INSTRUCTION = 'ABSEITS DER ROUTE!';
@@ -293,6 +353,9 @@ function updateWatchNavigationAndMap() {
     payload.NAV_INSTRUCTION = 'Keine GPX-Route geladen';
     payload.NAV_DISTANCE = '---';
     payload.TRIP_DISTANCE = '--- km';
+    payload.ELEVATION_GAIN = '---m / ---m';
+    payload.ELEVATION_LOSS = '---m / ---m';
+    closestTrackPointIdx = -1;
   }
   
   if (vibrateAlert !== 0) {
