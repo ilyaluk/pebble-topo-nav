@@ -193,13 +193,9 @@
 
   <!-- GPX Import -->
   <div class="card">
-    <div class="card-title">GPX-Route</div>
-    
-    <div id="dropzone" class="dropzone">
-      <p id="dropzone-text">Klicke zum Auswählen oder ziehe eine GPX-Datei hierher</p>
-      <span>Erlaubte Formate: .gpx</span>
-      <input type="file" id="gpx-file" accept=".gpx">
-    </div>
+    <div class="card-title">GPX-Route (XML-Text)</div>
+    <label for="gpx-text">Öffne deine GPX-Datei in einer Text-App auf deinem Handy, kopiere den gesamten XML-Inhalt und füge ihn hier ein:</label>
+    <textarea id="gpx-text" placeholder="Hier den GPX-Text einfügen (beginnend mit <gpx>)..." rows="10" style="width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 12px; border-radius: 8px; font-size: 13px; box-sizing: border-box; outline: none; resize: vertical; font-family: monospace; margin-top: 10px;"></textarea>
     
     <div id="status-msg" class="status-msg"></div>
   </div>
@@ -212,76 +208,71 @@
   var trackPoints = [];
 
   // UI elements
-  var dropzone = document.getElementById("dropzone");
-  var gpxInput = document.getElementById("gpx-file");
-  var dropzoneText = document.getElementById("dropzone-text");
+  var gpxTextArea = document.getElementById("gpx-text");
   var statusMsg = document.getElementById("status-msg");
   var saveBtn = document.getElementById("save-btn");
 
-  // Handle Drag & Drop (click is handled directly by the input overlay)
-  dropzone.addEventListener("dragover", function(e) {
-    e.preventDefault();
-    dropzone.classList.add("dragover");
-  });
-  dropzone.addEventListener("dragleave", function() {
-    dropzone.classList.remove("dragover");
-  });
-  dropzone.addEventListener("drop", function(e) {
-    e.preventDefault();
-    dropzone.classList.remove("dragover");
-    if (e.dataTransfer.files.length > 0) {
-      handleFile(e.dataTransfer.files[0]);
-    }
-  });
-  gpxInput.addEventListener("change", function() {
-    if (gpxInput.files.length > 0) {
-      handleFile(gpxInput.files[0]);
+  // Listen to input changes in the textarea
+  gpxTextArea.addEventListener("input", function() {
+    var text = gpxTextArea.value.trim();
+    if (text.length > 0) {
+      parseGPXText(text);
+    } else {
+      statusMsg.className = "status-msg";
+      statusMsg.innerText = "";
+      saveBtn.disabled = true;
+      trackPoints = [];
     }
   });
 
-  // Load and parse the GPX file
-  function handleFile(file) {
-    if (!file.name.endsWith(".gpx")) {
-      showStatus("Fehler: Bitte wähle eine valide .gpx Datei.", "error");
-      return;
-    }
-    dropzoneText.innerText = "Lese " + file.name + "...";
-    
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var parser = new DOMParser();
-        var xmlDoc = parser.parseFromString(e.target.result, "text/xml");
-        var trkpts = xmlDoc.getElementsByTagName("trkpt");
-        
-        if (trkpts.length === 0) {
-          showStatus("Fehler: Keine Trackpoints in der GPX-Datei gefunden.", "error");
-          dropzoneText.innerText = "Datei hochladen";
-          return;
-        }
+  // Parse GPX from raw string
+  function parseGPXText(gpxText) {
+    try {
+      var parser = new DOMParser();
+      var xmlDoc = parser.parseFromString(gpxText, "text/xml");
+      
+      // Basic check for XML parsing errors
+      var parserError = xmlDoc.getElementsByTagName("parsererror");
+      if (parserError.length > 0) {
+        showStatus("Fehler beim Parsen: Ungültiges XML-Format.", "error");
+        saveBtn.disabled = true;
+        return;
+      }
 
-        var rawPoints = [];
-        for (var i = 0; i < trkpts.length; i++) {
+      var trkpts = xmlDoc.getElementsByTagName("trkpt");
+      if (trkpts.length === 0) {
+        showStatus("Fehler: Keine <trkpt>-Elemente (Trackpoints) in den GPX-Daten gefunden.", "error");
+        saveBtn.disabled = true;
+        return;
+      }
+
+      var rawPoints = [];
+      for (var i = 0; i < trkpts.length; i++) {
+        var latVal = trkpts[i].getAttribute("lat");
+        var lonVal = trkpts[i].getAttribute("lon");
+        if (latVal && lonVal) {
           rawPoints.push({
-            lat: parseFloat(trkpts[i].getAttribute("lat")),
-            lon: parseFloat(trkpts[i].getAttribute("lon"))
+            lat: parseFloat(latVal),
+            lon: parseFloat(lonVal)
           });
         }
-
-        // Simplify track using Douglas-Peucker to save memory (15m tolerance = 0.00015)
-        trackPoints = simplifyDouglasPeucker(rawPoints, 0.00015);
-        
-        showStatus("GPX-Datei geladen. " + rawPoints.length + " Punkte auf " + trackPoints.length + " vereinfacht.", "success");
-        dropzoneText.innerText = file.name + " (" + trackPoints.length + " Punkte)";
-        
-        saveBtn.disabled = false;
-      } catch (err) {
-        showStatus("Fehler beim Parsen der GPX-Datei: " + err.message, "error");
-        dropzoneText.innerText = "Datei hochladen";
-        saveBtn.disabled = true;
       }
-    };
-    reader.readAsText(file);
+
+      if (rawPoints.length === 0) {
+        showStatus("Fehler: Trackpoints enthalten keine Koordinaten (lat/lon).", "error");
+        saveBtn.disabled = true;
+        return;
+      }
+
+      // Simplify track using Douglas-Peucker to save memory (15m tolerance = 0.00015)
+      trackPoints = simplifyDouglasPeucker(rawPoints, 0.00015);
+      
+      showStatus("GPX-Daten erfolgreich geladen! " + rawPoints.length + " Punkte wurden auf " + trackPoints.length + " reduziert.", "success");
+      saveBtn.disabled = false;
+    } catch (err) {
+      showStatus("Fehler: " + err.message, "error");
+      saveBtn.disabled = true;
+    }
   }
 
   // Ramer-Douglas-Peucker Simplification
