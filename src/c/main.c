@@ -115,13 +115,21 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
                      GRect(bounds.size.w - 35, 2, 30, 20),
                      GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
   
+  // Draw Battery percent text
+  BatteryChargeState battery = battery_state_service_peek();
+  static char battery_buf[8];
+  snprintf(battery_buf, sizeof(battery_buf), "%d%%", battery.charge_percent);
+  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                     GRect(bounds.size.w - 75, 2, 35, 20),
+                     GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
+  
   // Draw GPS Status icon
   if (s_gps_connected) {
     graphics_context_set_fill_color(ctx, GColorIslamicGreen);
   } else {
     graphics_context_set_fill_color(ctx, GColorRed);
   }
-  graphics_fill_rect(ctx, GRect(bounds.size.w - 48, 8, 6, 6), 3, GCornersAll);
+  graphics_fill_rect(ctx, GRect(bounds.size.w - 87, 8, 6, 6), 3, GCornersAll);
   
   // Draw Arrow
   if (s_nav_bearing != -1) {
@@ -345,7 +353,7 @@ static void main_window_load(Window *window) {
   layer_add_child(window_layer, s_header_layer);
   
   // Distance text in header (left indent for arrow)
-  s_distance_layer = text_layer_create(GRect(35, 2, bounds.size.w - 90, 26));
+  s_distance_layer = text_layer_create(GRect(35, 2, bounds.size.w - 125, 26));
   text_layer_set_background_color(s_distance_layer, GColorClear);
   text_layer_set_text_color(s_distance_layer, GColorBlack);
   text_layer_set_font(s_distance_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
@@ -468,6 +476,10 @@ static void main_window_unload(Window *window) {
   layer_destroy(s_dashboard_layer);
 }
 
+static void battery_state_handler(BatteryChargeState charge) {
+  layer_mark_dirty(s_header_layer);
+}
+
 // App Initialization
 static void init() {
   s_main_window = window_create();
@@ -487,11 +499,15 @@ static void init() {
   // Allocate buffer for AppMessages (3400 inbox, 128 outbox)
   app_message_open(3400, 128);
   
+  // Register battery state service
+  battery_state_service_subscribe(battery_state_handler);
+  
   window_stack_push(s_main_window, true);
 }
 
 // App Deinitialization
 static void deinit() {
+  battery_state_service_unsubscribe();
   window_destroy(s_main_window);
 }
 
