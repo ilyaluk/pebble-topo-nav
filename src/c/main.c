@@ -243,13 +243,13 @@ static void click_config_provider(void *context) {
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   // Handle text values
   Tuple *dist_tuple = dict_find(iter, MESSAGE_KEY_NAV_DISTANCE);
-  if (dist_tuple) {
+  if (dist_tuple && s_distance_layer) {
     snprintf(s_distance_text, sizeof(s_distance_text), "%s", dist_tuple->value->cstring);
     text_layer_set_text(s_distance_layer, s_distance_text);
   }
   
   Tuple *inst_tuple = dict_find(iter, MESSAGE_KEY_NAV_INSTRUCTION);
-  if (inst_tuple) {
+  if (inst_tuple && s_instruction_layer) {
     snprintf(s_instruction_text, sizeof(s_instruction_text), "%s", inst_tuple->value->cstring);
     text_layer_set_text(s_instruction_layer, s_instruction_text);
   }
@@ -257,45 +257,53 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *bearing_tuple = dict_find(iter, MESSAGE_KEY_NAV_BEARING);
   if (bearing_tuple) {
     s_nav_bearing = bearing_tuple->value->int32;
-    layer_mark_dirty(s_header_layer);
+    if (s_header_layer) {
+      layer_mark_dirty(s_header_layer);
+    }
   }
   
   Tuple *gps_tuple = dict_find(iter, MESSAGE_KEY_GPS_CONNECTED);
   if (gps_tuple) {
     s_gps_connected = (gps_tuple->value->uint8 == 1);
-    layer_mark_dirty(s_header_layer);
-    layer_mark_dirty(s_map_layer);
+    if (s_header_layer) {
+      layer_mark_dirty(s_header_layer);
+    }
+    if (s_map_layer) {
+      layer_mark_dirty(s_map_layer);
+    }
   }
   
   Tuple *off_route_tuple = dict_find(iter, MESSAGE_KEY_OFF_ROUTE);
   if (off_route_tuple) {
     s_off_route = (off_route_tuple->value->uint8 == 1);
-    layer_mark_dirty(s_footer_layer);
+    if (s_footer_layer) {
+      layer_mark_dirty(s_footer_layer);
+    }
   }
   
   // Dashboard fields
   Tuple *avg_speed_tuple = dict_find(iter, MESSAGE_KEY_AVG_SPEED);
-  if (avg_speed_tuple) {
+  if (avg_speed_tuple && s_dash_avg_speed_val_layer) {
     snprintf(s_avg_speed_text, sizeof(s_avg_speed_text), "%s", avg_speed_tuple->value->cstring);
     text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
   }
   Tuple *gain_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_GAIN);
-  if (gain_tuple) {
+  if (gain_tuple && s_dash_gain_val_layer) {
     snprintf(s_elevation_gain_text, sizeof(s_elevation_gain_text), "%s", gain_tuple->value->cstring);
     text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
   }
   Tuple *loss_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_LOSS);
-  if (loss_tuple) {
+  if (loss_tuple && s_dash_loss_val_layer) {
     snprintf(s_elevation_loss_text, sizeof(s_elevation_loss_text), "%s", loss_tuple->value->cstring);
     text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
   }
   Tuple *trip_dist_tuple = dict_find(iter, MESSAGE_KEY_TRIP_DISTANCE);
-  if (trip_dist_tuple) {
+  if (trip_dist_tuple && s_dash_dist_val_layer) {
     snprintf(s_trip_distance_text, sizeof(s_trip_distance_text), "%s", trip_dist_tuple->value->cstring);
     text_layer_set_text(s_dash_dist_val_layer, s_trip_distance_text);
   }
   Tuple *coords_tuple = dict_find(iter, MESSAGE_KEY_GPS_COORDS);
-  if (coords_tuple) {
+  if (coords_tuple && s_dash_coords_val_layer) {
     snprintf(s_coords_text, sizeof(s_coords_text), "%s", coords_tuple->value->cstring);
     text_layer_set_text(s_dash_coords_val_layer, s_coords_text);
   }
@@ -516,7 +524,9 @@ static void main_window_unload(Window *window) {
 }
 
 static void battery_state_handler(BatteryChargeState charge) {
-  layer_mark_dirty(s_header_layer);
+  if (s_header_layer) {
+    layer_mark_dirty(s_header_layer);
+  }
 }
 
 // App Initialization
