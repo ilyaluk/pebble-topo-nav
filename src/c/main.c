@@ -15,10 +15,12 @@ static Layer *s_dashboard_layer;
 static TextLayer *s_distance_layer;
 static TextLayer *s_instruction_layer;
 
-static TextLayer *s_dash_speed_title_layer;
-static TextLayer *s_dash_speed_val_layer;
-static TextLayer *s_dash_alt_title_layer;
-static TextLayer *s_dash_alt_val_layer;
+static TextLayer *s_dash_avg_speed_title_layer;
+static TextLayer *s_dash_avg_speed_val_layer;
+static TextLayer *s_dash_gain_title_layer;
+static TextLayer *s_dash_gain_val_layer;
+static TextLayer *s_dash_loss_title_layer;
+static TextLayer *s_dash_loss_val_layer;
 static TextLayer *s_dash_dist_title_layer;
 static TextLayer *s_dash_dist_val_layer;
 
@@ -37,8 +39,9 @@ static uint32_t s_expected_chunks = 0;
 
 static char s_distance_text[16] = "---";
 static char s_instruction_text[64] = "Warte auf GPS...";
-static char s_speed_text[16] = "0.0 km/h";
-static char s_altitude_text[16] = "--- m";
+static char s_avg_speed_text[16] = "0.0 km/h";
+static char s_elevation_gain_text[24] = "---m / ---m";
+static char s_elevation_loss_text[24] = "---m / ---m";
 static char s_trip_distance_text[16] = "--- km";
 
 // Haptic feedback levels
@@ -62,7 +65,7 @@ static void send_zoom_change() {
 // Drawing function for arrow icons
 static void draw_arrow(GContext *ctx, GPoint center, int bearing) {
   graphics_context_set_stroke_width(ctx, 3);
-  graphics_context_set_stroke_color(ctx, GColorChromeYellow);
+  graphics_context_set_stroke_color(ctx, GColorOrange);
   
   // Center coordinates: x, y
   int cx = center.x;
@@ -96,13 +99,18 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
   // Background
-  graphics_context_set_fill_color(ctx, GColorDarkGray);
+  graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  
+  // Separation line at bottom
+  graphics_context_set_stroke_color(ctx, GColorLightGray);
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_line(ctx, GPoint(0, bounds.size.h - 1), GPoint(bounds.size.w, bounds.size.h - 1));
   
   // Draw Zoom level text on top-right
   static char zoom_buf[8];
   snprintf(zoom_buf, sizeof(zoom_buf), "Z:%d", s_zoom_level);
-  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_context_set_text_color(ctx, GColorBlack);
   graphics_draw_text(ctx, zoom_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
                      GRect(bounds.size.w - 35, 2, 30, 20),
                      GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
@@ -126,13 +134,18 @@ static void footer_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
   // Background
-  graphics_context_set_fill_color(ctx, GColorDarkGray);
+  graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  
+  // Separation line at top
+  graphics_context_set_stroke_color(ctx, GColorLightGray);
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_line(ctx, GPoint(0, 0), GPoint(bounds.size.w, 0));
   
   // Off-route warning banner
   if (s_off_route) {
     graphics_context_set_fill_color(ctx, GColorRed);
-    graphics_fill_rect(ctx, GRect(0, 0, bounds.size.w, 4), 0, GCornerNone);
+    graphics_fill_rect(ctx, GRect(0, 1, bounds.size.w, 4), 0, GCornerNone);
   }
 }
 
@@ -165,11 +178,12 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorClear);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   
-  // Draw separation lines
+  // Draw separation lines for 4 rows
   graphics_context_set_stroke_color(ctx, GColorDarkGray);
   graphics_context_set_stroke_width(ctx, 2);
-  graphics_draw_line(ctx, GPoint(10, bounds.size.h / 3), GPoint(bounds.size.w - 10, bounds.size.h / 3));
-  graphics_draw_line(ctx, GPoint(10, (bounds.size.h * 2) / 3), GPoint(bounds.size.w - 10, (bounds.size.h * 2) / 3));
+  graphics_draw_line(ctx, GPoint(10, bounds.size.h / 4), GPoint(bounds.size.w - 10, bounds.size.h / 4));
+  graphics_draw_line(ctx, GPoint(10, bounds.size.h / 2), GPoint(bounds.size.w - 10, bounds.size.h / 2));
+  graphics_draw_line(ctx, GPoint(10, (bounds.size.h * 3) / 4), GPoint(bounds.size.w - 10, (bounds.size.h * 3) / 4));
 }
 
 // Button Clicks Handlers
@@ -243,15 +257,20 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   }
   
   // Dashboard fields
-  Tuple *speed_tuple = dict_find(iter, MESSAGE_KEY_SPEED);
-  if (speed_tuple) {
-    snprintf(s_speed_text, sizeof(s_speed_text), "%s", speed_tuple->value->cstring);
-    text_layer_set_text(s_dash_speed_val_layer, s_speed_text);
+  Tuple *avg_speed_tuple = dict_find(iter, MESSAGE_KEY_AVG_SPEED);
+  if (avg_speed_tuple) {
+    snprintf(s_avg_speed_text, sizeof(s_avg_speed_text), "%s", avg_speed_tuple->value->cstring);
+    text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
   }
-  Tuple *alt_tuple = dict_find(iter, MESSAGE_KEY_ALTITUDE);
-  if (alt_tuple) {
-    snprintf(s_altitude_text, sizeof(s_altitude_text), "%s", alt_tuple->value->cstring);
-    text_layer_set_text(s_dash_alt_val_layer, s_altitude_text);
+  Tuple *gain_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_GAIN);
+  if (gain_tuple) {
+    snprintf(s_elevation_gain_text, sizeof(s_elevation_gain_text), "%s", gain_tuple->value->cstring);
+    text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
+  }
+  Tuple *loss_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_LOSS);
+  if (loss_tuple) {
+    snprintf(s_elevation_loss_text, sizeof(s_elevation_loss_text), "%s", loss_tuple->value->cstring);
+    text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
   }
   Tuple *trip_dist_tuple = dict_find(iter, MESSAGE_KEY_TRIP_DISTANCE);
   if (trip_dist_tuple) {
@@ -328,7 +347,7 @@ static void main_window_load(Window *window) {
   // Distance text in header (left indent for arrow)
   s_distance_layer = text_layer_create(GRect(35, 2, bounds.size.w - 90, 26));
   text_layer_set_background_color(s_distance_layer, GColorClear);
-  text_layer_set_text_color(s_distance_layer, GColorWhite);
+  text_layer_set_text_color(s_distance_layer, GColorBlack);
   text_layer_set_font(s_distance_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text(s_distance_layer, s_distance_text);
   layer_add_child(s_header_layer, text_layer_get_layer(s_distance_layer));
@@ -346,7 +365,7 @@ static void main_window_load(Window *window) {
   // Instruction Text in Footer
   s_instruction_layer = text_layer_create(GRect(6, 4, bounds.size.w - 12, 40));
   text_layer_set_background_color(s_instruction_layer, GColorClear);
-  text_layer_set_text_color(s_instruction_layer, GColorWhite);
+  text_layer_set_text_color(s_instruction_layer, GColorBlack);
   text_layer_set_font(s_instruction_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_instruction_layer, GTextAlignmentCenter);
   text_layer_set_text(s_instruction_layer, s_instruction_text);
@@ -359,50 +378,65 @@ static void main_window_load(Window *window) {
   layer_add_child(window_layer, s_dashboard_layer);
   
   int dash_h = bounds.size.h - 30; // 198px
-  int row_h = dash_h / 3; // 66px
+  int row_h = dash_h / 4; // 49px
   
-  // Speed Rows
-  s_dash_speed_title_layer = text_layer_create(GRect(10, 8, bounds.size.w - 20, 16));
-  text_layer_set_background_color(s_dash_speed_title_layer, GColorClear);
-  text_layer_set_text_color(s_dash_speed_title_layer, GColorDarkGray);
-  text_layer_set_font(s_dash_speed_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_text(s_dash_speed_title_layer, "GESCHWINDIGKEIT");
-  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_speed_title_layer));
+  // Row 0: Average Speed
+  s_dash_avg_speed_title_layer = text_layer_create(GRect(10, 2, bounds.size.w - 20, 15));
+  text_layer_set_background_color(s_dash_avg_speed_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_avg_speed_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_avg_speed_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text(s_dash_avg_speed_title_layer, "Ø-GESCHWINDIGKEIT");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_avg_speed_title_layer));
   
-  s_dash_speed_val_layer = text_layer_create(GRect(10, 24, bounds.size.w - 20, 32));
-  text_layer_set_background_color(s_dash_speed_val_layer, GColorClear);
-  text_layer_set_text_color(s_dash_speed_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_speed_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-  text_layer_set_text(s_dash_speed_val_layer, s_speed_text);
-  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_speed_val_layer));
+  s_dash_avg_speed_val_layer = text_layer_create(GRect(10, 16, bounds.size.w - 20, 28));
+  text_layer_set_background_color(s_dash_avg_speed_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_avg_speed_val_layer, GColorBlack);
+  text_layer_set_font(s_dash_avg_speed_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_avg_speed_val_layer));
   
-  // Altitude Rows
-  s_dash_alt_title_layer = text_layer_create(GRect(10, row_h + 8, bounds.size.w - 20, 16));
-  text_layer_set_background_color(s_dash_alt_title_layer, GColorClear);
-  text_layer_set_text_color(s_dash_alt_title_layer, GColorDarkGray);
-  text_layer_set_font(s_dash_alt_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_text(s_dash_alt_title_layer, "HÖHE");
-  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_alt_title_layer));
+  // Row 1: Elevation Gain (Aufstieg gemacht / verbleibend)
+  s_dash_gain_title_layer = text_layer_create(GRect(10, row_h + 2, bounds.size.w - 20, 15));
+  text_layer_set_background_color(s_dash_gain_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_gain_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_gain_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text(s_dash_gain_title_layer, "HM AUFSTIEG (GEM / VERBL)");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_gain_title_layer));
   
-  s_dash_alt_val_layer = text_layer_create(GRect(10, row_h + 24, bounds.size.w - 20, 32));
-  text_layer_set_background_color(s_dash_alt_val_layer, GColorClear);
-  text_layer_set_text_color(s_dash_alt_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_alt_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
-  text_layer_set_text(s_dash_alt_val_layer, s_altitude_text);
-  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_alt_val_layer));
+  s_dash_gain_val_layer = text_layer_create(GRect(10, row_h + 16, bounds.size.w - 20, 28));
+  text_layer_set_background_color(s_dash_gain_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_gain_val_layer, GColorBlack);
+  text_layer_set_font(s_dash_gain_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_gain_val_layer));
   
-  // Remaining Distance Rows
-  s_dash_dist_title_layer = text_layer_create(GRect(10, (row_h * 2) + 8, bounds.size.w - 20, 16));
+  // Row 2: Elevation Loss (Abstieg gemacht / verbleibend)
+  s_dash_loss_title_layer = text_layer_create(GRect(10, (row_h * 2) + 2, bounds.size.w - 20, 15));
+  text_layer_set_background_color(s_dash_loss_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_loss_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_loss_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text(s_dash_loss_title_layer, "HM ABSTIEG (GEM / VERBL)");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_loss_title_layer));
+  
+  s_dash_loss_val_layer = text_layer_create(GRect(10, (row_h * 2) + 16, bounds.size.w - 20, 28));
+  text_layer_set_background_color(s_dash_loss_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_loss_val_layer, GColorBlack);
+  text_layer_set_font(s_dash_loss_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_loss_val_layer));
+  
+  // Row 3: Remaining Distance
+  s_dash_dist_title_layer = text_layer_create(GRect(10, (row_h * 3) + 2, bounds.size.w - 20, 15));
   text_layer_set_background_color(s_dash_dist_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_dist_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
   text_layer_set_text(s_dash_dist_title_layer, "RESTLICHE DISTANZ");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_title_layer));
   
-  s_dash_dist_val_layer = text_layer_create(GRect(10, (row_h * 2) + 24, bounds.size.w - 20, 32));
+  s_dash_dist_val_layer = text_layer_create(GRect(10, (row_h * 3) + 16, bounds.size.w - 20, 28));
   text_layer_set_background_color(s_dash_dist_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_dist_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+  text_layer_set_font(s_dash_dist_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text(s_dash_dist_val_layer, s_trip_distance_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_val_layer));
 }
@@ -423,10 +457,12 @@ static void main_window_unload(Window *window) {
   layer_destroy(s_map_layer);
   layer_destroy(s_footer_layer);
   
-  text_layer_destroy(s_dash_speed_title_layer);
-  text_layer_destroy(s_dash_speed_val_layer);
-  text_layer_destroy(s_dash_alt_title_layer);
-  text_layer_destroy(s_dash_alt_val_layer);
+  text_layer_destroy(s_dash_avg_speed_title_layer);
+  text_layer_destroy(s_dash_avg_speed_val_layer);
+  text_layer_destroy(s_dash_gain_title_layer);
+  text_layer_destroy(s_dash_gain_val_layer);
+  text_layer_destroy(s_dash_loss_title_layer);
+  text_layer_destroy(s_dash_loss_val_layer);
   text_layer_destroy(s_dash_dist_title_layer);
   text_layer_destroy(s_dash_dist_val_layer);
   layer_destroy(s_dashboard_layer);

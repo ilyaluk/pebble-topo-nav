@@ -25,8 +25,9 @@
       "GPS_CONNECTED",
       "OFF_ROUTE",
       "REQUEST_MAP_UPDATE",
-      "SPEED",
-      "ALTITUDE",
+      "AVG_SPEED",
+      "ELEVATION_GAIN",
+      "ELEVATION_LOSS",
       "TRIP_DISTANCE",
       "VIBRATE_ALERT"
     ],

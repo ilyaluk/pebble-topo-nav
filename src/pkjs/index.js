@@ -466,7 +466,8 @@ function doRenderAndChunkSend(tileCache) {
       currentLocation.lon,
       currentZoom,
       gpxTrack,
-      tileCache
+      tileCache,
+      closestTrackPointIdx
     );
     
     // Chunked Transmission Loop
