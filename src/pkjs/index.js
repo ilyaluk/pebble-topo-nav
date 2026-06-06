@@ -88,8 +88,8 @@ Pebble.addEventListener('ready', function() {
 
 // Settings config page trigger
 Pebble.addEventListener('showConfiguration', function() {
-  // In production, replace this with your hosted config URL (e.g. GitHub Pages)
-  Pebble.openURL('https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config.html');
+  // We use a query parameter cache-buster to prevent mobile WebViews from caching config.html
+  Pebble.openURL('https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config.html?v=' + Date.now());
 });
 
 // Settings config page closed
