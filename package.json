@@ -29,7 +29,8 @@
       "ELEVATION_GAIN",
       "ELEVATION_LOSS",
       "TRIP_DISTANCE",
-      "VIBRATE_ALERT"
+      "VIBRATE_ALERT",
+      "GPS_COORDS"
     ],
     "resources": {
       "media": []

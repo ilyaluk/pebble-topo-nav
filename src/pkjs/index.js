@@ -227,7 +227,8 @@ function updateWatchNavigationAndMap() {
   var avgSpeedKmh = totalMovingTimeSec > 0 ? (totalMovingDistance / totalMovingTimeSec) * 3.6 : 0;
   var payload = {
     GPS_CONNECTED: 1,
-    AVG_SPEED: avgSpeedKmh.toFixed(1) + ' km/h'
+    AVG_SPEED: avgSpeedKmh.toFixed(1) + ' km/h',
+    GPS_COORDS: currentLocation.lat.toFixed(5) + ', ' + currentLocation.lon.toFixed(5)
   };
 
   var offRoute = false;
