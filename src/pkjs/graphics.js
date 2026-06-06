@@ -88,7 +88,7 @@ function drawLineThick(buffer, x0, y0, x1, y1, thickness, r, g, b) {
 }
 
 // Stitch map tiles, draw GPX track, overlay user position, and return GColor8 buffer
-function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache) {
+function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, closestIdx) {
   // 1. Initialize RGBA viewport buffer (filled with light grey color)
   var rgbaBuffer = new Uint8Array(MAP_WIDTH * MAP_HEIGHT * 4);
   for (var i = 0; i < rgbaBuffer.length; i += 4) {
@@ -150,7 +150,7 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache) {
     }
   }
   
-  // 5. Render GPX track overlay (Bright Red line)
+  // 5. Render GPX track overlay (gray out walked part)
   if (gpxTrack && gpxTrack.length > 1) {
     for (var k = 0; k < gpxTrack.length - 1; k++) {
       var pt1 = gpxTrack[k];
@@ -166,9 +166,12 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache) {
       var sx2 = Math.floor(pix2.x - tlX);
       var sy2 = Math.floor(pix2.y - tlY);
       
-      // Draw line if it intersects the viewport (or close enough)
-      // Bresenham does clipping internally through drawPixel bounds check
-      drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 255, 0, 0); // 3px thick red line
+      // Draw line. Gray out walked parts (k < closestIdx)
+      if (closestIdx !== undefined && closestIdx !== null && k < closestIdx) {
+        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 128, 128, 128); // 3px grey line
+      } else {
+        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 255, 85, 0); // 3px orange line
+      }
     }
   }
   
