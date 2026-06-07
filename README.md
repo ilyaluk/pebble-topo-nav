@@ -1,107 +1,95 @@
-# Walkthrough: TopoNav für Pebble Time 2
+# TopoNav 🗺️
 
-Wir haben eine komplette Navigations-App mit OpenTopoMap-Kacheln und GPX-Unterstützung für die Pebble Time 2 (`emery` Plattform) implementiert.
+**Offline Topographic Map Navigation & Activity Recorder for Pebble Smartwatches**
 
-## Erstellte Dateien und Ordnerstruktur
+TopoNav brings full topographic map navigation, GPX route guidance, and workout tracking directly to your wrist. Compatible with all Pebble platforms (including Pebble Time 2/`emery`), it works by companion-stitching live OpenTopoMap tiles, rendering colored route paths, and utilizing sensor-fused compass/GPS headings.
 
-Die gesamte Projektstruktur des Repositories ist wie folgt aufgebaut:
-
-- **Projekt-Konfiguration**:
-  - [package.json](file:///d:/Coding/Anitgravity/package.json): Definiert App-Metadaten, UUID, unterstützte Plattformen (`aplite`, `basalt`, `chalk`, `emery`), MessageKeys für AppMessage und Clay-Konfigurationsrechte.
-  - [wscript](file:///d:/Coding/Anitgravity/wscript): Compiler-Skript für das Pebble SDK (Waf).
-- **Watchapp (C)**:
-  - [main.c](file:///d:/Coding/Anitgravity/src/c/main.c): Der C-Code für die Uhr. Verwaltet die Benutzeroberfläche (Header mit Abbiegepfeilen, Kartenlayer für GColor8, Footer für Straßennamen und ein umschaltbares Daten-Dashboard), empfängt Bildkacheln in Chunks von je 3.000 Bytes und reagiert auf Tastendrücke (Up/Down für Zoom, Select für Dashboard) sowie Vibrationsalarme.
-- **Phone Companion (JavaScript)**:
-  - [png.js](file:///d:/Coding/Anitgravity/src/pkjs/png.js): Ein leichtgewichtiger PNG-Decoder mit integriertem Huffman-Inflate (Deflate-Entkomprimierung), um OpenTopoMap-Kacheln direkt im PebbleKit JS-Sandbox-Thread auf dem Smartphone zu decodieren.
-  - [graphics.js](file:///d:/Coding/Anitgravity/src/pkjs/graphics.js): Enthält die Web-Mercator-Projektionsberechnungen, das Zusammenfügen mehrerer Kartenkacheln, das Zeichnen der GPX-Route (mit einstellbarer Linienstärke), die Darstellung der eigenen Position (blauer Punkt mit weißem Rand) und die Farbreduktion in die Pebble-native 64-Farben-Palette (`GColor8`).
-  - [index.js](file:///d:/Coding/Anitgravity/src/pkjs/index.js): Die zentrale Steuerung auf dem Handy. Beobachtet die GPS-Position, berechnet verbleibende Strecken und Distanzen bis zur nächsten Kurve, verarbeitet Vibrationshinweise (Abbiegung vs. Abseits der Route) und sendet das gerenderte Kartenbild in kontrollierten AppMessage-Paketen an die Uhr.
-  - [config.html](file:///d:/Coding/Anitgravity/src/pkjs/config.html): Das Einstellungsfenster auf dem Smartphone. Ermöglicht den Upload von `.gpx` Dateien, vereinfacht den Track automatisch mittels Douglas-Peucker-Algorithmus (um Speicherplatz zu sparen) und übergibt die Daten an den JavaScript-Hintergrundprozess.
+![TopoNav Banner](images/appstore_banner.png)
 
 ---
 
-## Verifikationsergebnisse
+## 🌟 Key Features (For Users)
 
-Wir haben einen automatisierten Integrationstest unter [test_renderer.js](file:///C:/Users/twigb/.gemini/antigravity/brain/97deebd2-31b9-491e-94e2-9ce056e30617/scratch/test_renderer.js) erstellt und ausgeführt:
+* 🗺️ **Detailed Topographic Maps**: Displays real-world topographic maps (contour lines, hiking paths, water bodies) in Pebble-native 64 colors (`GColor8`).
+* 🥾 **GPX Route Guidance**: Upload, name, and store multiple GPX files on your phone. Choose, activate, or deactivate routes directly from a dedicated on-watch menu.
+* 📍 **Sensor-Fused Compass Arrow**: A dynamic direction chevron representing your heading.
+  * *Stationary (Speed <= 1.0 m/s)*: Aligns in real time using the watch's hardware magnetic compass.
+  * *In Motion (Speed > 1.0 m/s)*: Automatically switches to GPS-based direction to filter out wrist-swing jitter.
+* ⏺️ **Activity Recording & GPX Export**: Start or stop recording your path by long-pressing the *Select* button on your watch (or using the phone UI). Export your finished workouts as standard `.gpx` files from the companion settings page.
+* 📊 **Dual-Column Stats Dashboard**: Real-time workout metrics at a glance:
+  * **Average Speed** and **Trip Distance** (Walked vs. Remaining in km) in large, bold fonts.
+  * **Elevation Profile** (Gain and Loss) for hikers.
+  * **GPS Coordinates** in real-time.
+* 🔊 **Turn-by-Turn & Off-Route Alerts**: Screen indications and distinct vibration patterns notify you when a turn is approaching or when you drift more than 50 meters off-route.
+* 🔋 **High Contrast & Battery Indicator**: Optimised high-contrast white header/footer layouts for excellent sunlight legibility, complete with watch battery level percentage.
+* 🌐 **Multilingual Support**: Fully translated into both **English** and **German**.
 
-1. **Download der Kartenkachel**: Erfolgreich eine echte Kachel (Zoom 15) von OpenTopoMap heruntergeladen.
-2. **PNG-Decodierung**: Die Kachel wurde fehlerfrei entpackt und in ein RGBA-Pixelarray (262.144 Bytes) decodiert.
-3. **Kartenstitching & Routenzeichnung**: Ein simulierter GPX-Track wurde auf den Kartenausschnitt projiziert und gezeichnet.
-4. **Farbkonvertierung**: Der Ausschnitt wurde in Pebble-GColor8 quantisiert und ergab genau die erwarteten 30.000 Bytes (200x150 Pixel für den Watch-Kartenlayer).
+---
 
-```bash
-> node scratch/test_renderer.js
-Downloading map tile sample from OpenTopoMap...
-Sample tile downloaded. Reading file...
-Testing PNG decoder...
-Success! Decoded PNG dimensions: 256x256
-RGBA Pixels buffer length: 262144 bytes
-Testing viewport stitcher and GColor8 converter...
-Success! Rendered map viewport. GColor8 buffer length: 30000 bytes
-Verification PASSED!
+## 📸 Screenshots Gallery
+
+| Map View | Stats Dashboard | Off-Route Warning |
+| :---: | :---: | :---: |
+| ![Map View](images/screenshot_map.png) | ![Stats Dashboard](images/screenshot_dashboard.png) | ![Off-Route Warning](release_assets/screenshot_offroute_200x228.png) |
+
+---
+
+## 🛠️ Technical Architecture (For Developers)
+
+TopoNav uses a split watchapp/phone-companion architecture via **PebbleKit JS**:
+
+```mermaid
+graph TD
+    subgraph Watch (C)
+        main.c[main.c: UI / Rendering / Sensors]
+    end
+    subgraph Phone (PebbleKit JS)
+        index.js[index.js: State Manager & GPS Listener]
+        graphics.js[graphics.js: Tile Stitcher & GPX Renderer]
+        png.js[png.js: JS PNG Decoder]
+        config.html[config.html: Webview Configuration Page]
+    end
+    
+    config.html -- "Upload GPX / Change Settings" --> index.js
+    index.js -- "GPS Updates / State" --> graphics.js
+    graphics.js -- "Fetches & Decodes Tiles" --> png.js
+    graphics.js -- "AppMessage Chunks (3000 Bytes)" --> main.c
+    main.c -- "Change Zoom / Change Active Route" --> index.js
 ```
 
----
+### Component Breakdown:
 
-## Kompilierung und Build-Prozess
+1. **Watchapp (`src/c/main.c`)**:
+   * Written in C. Renders the map layer, the custom sensor-fused GPath compass chevron, and the dual-column metrics dashboard.
+   * Manages packet assembly: Receives raw 30,000-byte framebuffers (`200x150` GColor8 pixels) from the phone in 3,000-byte `AppMessage` chunks.
+   * Listens to Pebble's `CompassService` and `BatteryStateService`.
+   * Integrates a Custom Menu Window (`SimpleMenuLayer`) for on-watch route swapping.
 
-Das Watchapp-Binary wurde erfolgreich mit dem Rebble Pebble SDK Compiler über Docker kompiliert. 
-
-### Fertiges Release-Binary
-* **Watchapp-Datei**: [project.pbw](file:///d:/Coding/Anitgravity/build/project.pbw) (befindet sich im Ordner `d:\Coding\Anitgravity\build\`)
-* **Größe**: ~124 KB
-* **Enthaltene Plattform-Targets**: `emery` (Pebble Time 2), `chalk` (Pebble Time Round), `basalt` (Pebble Time) und `aplite` (Pebble Classic)
-
----
-
-## Behobene Fehler während der Build-Phase
-
-1. **Waf Multi-Platform Build Schleife (`wscript`)**:
-   Der ursprüngliche `wscript`-Build-Schritt hat `ctx.pbl_program` im globalen Build-Kontext ausgeführt statt für jede Zielplattform separat. Dadurch fehlten die plattformspezifischen Compiler-Pfade und Umgebungsvariablen (wie `CPPPATH_ST` und `DEFINES_ST`). Wir haben das Skript so umgeschrieben, dass es eine Schleife über `ctx.env.TARGET_PLATFORMS` zieht und anschließend das finale App-Bündel mit `ctx.pbl_bundle` schnürt.
-
-2. **C-Kompilierungsfehler (`main.c`)**:
-   In `main.c` wurde fälschlicherweise der Farb-Identifier `GColorDarkOctagon` verwendet, welcher in der GColor8-Farbpalette von Pebble nicht existiert. Dieser wurde auf den korrekten Identifier `GColorDarkGray` korrigiert.
-
-3. **Laufzeit-Fehler (`index.js`)**:
-   In der JS-Companion-App wurde die Variable `CHUNK_SIZE` (welche die Paketgröße für Bildübertragungen festlegt) verwendet, aber nie deklariert. Dies wurde durch Hinzufügen von `var CHUNK_SIZE = 3000;` behoben.
+2. **Phone Companion (`src/pkjs/`)**:
+   * **`index.js`**: Orchestrates state synchronization, listens to GPS updates, buffers logs in `localStorage` for crash/app-exit persistence, and feeds metadata (next-turn arrow, remaining distance, elevation stats) to the watch.
+   * **`graphics.js`**: Calculates Web Mercator projection bounds, downloads OpenTopoMap tiles, renders GPX track segments (grey for walked, vibrant orange `#FF3C00` for upcoming path, 5px width), draws current viewport offsets, and maps color values down to GColor8.
+   * **`png.js`**: A lightweight PNG decoder featuring a custom Huffman-Inflate algorithm. PebbleKit JS has no access to Node.js libraries or Canvas, so PNGs are decoded directly in pure JS.
+   * **`config.html`**: A clay-based HTML settings page. Features Douglas-Peucker path simplification (reducing GPX sizes before syncing to the watch), route-naming controls, and GPX download options for recorded walks.
 
 ---
 
-## Anleitung zur Kompilierung und Installation
+## 🚀 Building & Running
 
-Du kannst die App auf zwei Wegen kompilieren bzw. installieren:
+### Method A: Local SDK Build (Using Docker)
+Since the original Pebble SDK relies on Python 2.7, we recommend compiling with Docker.
 
-### Methode A: Lokaler Build mit Docker (Empfohlen)
-Da Docker auf deinem Host-System läuft, kannst du den Build jederzeit mit folgendem PowerShell-Befehl ausführen:
-```powershell
-docker run --rm -v "d:\Coding\Anitgravity:/app" rebble/pebble-sdk bash /app/docker_build.sh
-```
-Das Skript kopiert die Dateien, patcht die Python-Kompatibilitätsprobleme des SDKs, kompiliert die App für alle vier Plattformen und legt die fertige Datei `project.pbw` im Ordner `d:\Coding\Anitgravity\build\` ab.
+1. Ensure Docker is running.
+2. Build the project using the helper script:
+   ```powershell
+   ./docker_build.sh
+   ```
+   *Or execute the Docker run command directly:*
+   ```powershell
+   docker run --rm -v "${PWD}:/app" rebble/pebble-sdk bash /app/docker_build.sh
+   ```
+3. The compiled watchapp bundle will be saved to: `build/project.pbw`
 
-### Methode B: CloudPebble (Repebble)
-1. Packe das Projekt-Verzeichnis `d:\Coding\Anitgravity` (ohne die Ordner `build` und `.lock-waf_linux2_build`) in eine `.zip`-Datei.
-2. Gehe auf [cloudpebble.repebble.com](https://cloudpebble.repebble.com/) und importiere die Zip-Datei.
-3. Kompiliere und teste die App im integrierten Browser-Emulator.
-
----
-
-## Release Assets
-
-Hier sind die für das Release generierten Grafik-Assets. Diese wurden automatisch in deinem Projekt-Artefaktverzeichnis gespeichert:
-
-### Icons
-* **App Icon (Groß - 512x512)**: Modernes dunkel-orangefarbenes Zirkel-Design auf Höhenlinien.
-  ![App Icon Groß](images/app_icon_large.png)
-* **App Icon (Klein - 48x48)**: Kontraststarkes flaches Zirkel-Icon für Menüs.
-  ![App Icon Klein](images/app_icon_small.png)
-
-### Appstore Banner & Screenshots
-Hier siehst du die Galerie des Banners und der simulierten App-Ansichten:
-
-````carousel
-![Appstore Banner](images/appstore_banner.png)
-<!-- slide -->
-![Kartenansicht Screenshot](images/screenshot_map.png)
-<!-- slide -->
-![Dashboard Screenshot](images/screenshot_dashboard.png)
-````
-
+### Method B: CloudPebble (Repebble)
+1. Compress the project folder (excluding `build` and `.lock-waf*` files) into a `.zip` archive.
+2. Go to [cloudpebble.repebble.com](https://cloudpebble.repebble.com/) and upload your zip file.
+3. Compile, run, and test directly in the browser emulator.
