@@ -80,6 +80,7 @@ function getBearing(lat1, lon1, lat2, lon2) {
 // Initialize the Pebble application
 Pebble.addEventListener('ready', function() {
   console.log('TopoNav PebbleKit JS is ready!');
+  initMapDimensions();
   
   // Load settings from LocalStorage
   var storedInterval = localStorage.getItem('gpsInterval');

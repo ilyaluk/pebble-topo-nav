@@ -1,6 +1,30 @@
 var MAP_WIDTH = 200;
 var MAP_HEIGHT = 150;
 
+function initMapDimensions() {
+  var platform = "basalt";
+  if (typeof Pebble !== 'undefined' && Pebble.getActiveWatchInfo) {
+    try {
+      var info = Pebble.getActiveWatchInfo();
+      platform = info.platform || "basalt";
+    } catch(e) {
+      console.log("Error getting watch info: " + e);
+    }
+  }
+  
+  if (platform === "emery") {
+    MAP_WIDTH = 200;
+    MAP_HEIGHT = 150;
+  } else if (platform === "chalk") {
+    MAP_WIDTH = 180;
+    MAP_HEIGHT = 114;
+  } else { // basalt, aplite
+    MAP_WIDTH = 144;
+    MAP_HEIGHT = 112;
+  }
+  console.log("Initialized map dimensions for platform " + platform + ": " + MAP_WIDTH + "x" + MAP_HEIGHT);
+}
+
 // Convert latitude and longitude to absolute world pixels at a given zoom level
 function latLonToPixels(lat, lon, zoom) {
   var totalPixels = 256 * Math.pow(2, zoom);

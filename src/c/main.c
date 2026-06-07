@@ -1,8 +1,29 @@
 #include <pebble.h>
 
 #define CHUNK_SIZE 3000
-#define MAP_WIDTH 200
-#define MAP_HEIGHT 150
+#if defined(PBL_PLATFORM_EMERY)
+  #define MAP_WIDTH 200
+  #define MAP_HEIGHT 150
+  #define HEADER_HEIGHT 30
+  #define FOOTER_HEIGHT 48
+  #define DISTANCE_FONT FONT_KEY_GOTHIC_24_BOLD
+  #define INSTRUCTION_FONT FONT_KEY_GOTHIC_18_BOLD
+#elif defined(PBL_PLATFORM_CHALK)
+  #define MAP_WIDTH 180
+  #define MAP_HEIGHT 114
+  #define HEADER_HEIGHT 30
+  #define FOOTER_HEIGHT 36
+  #define DISTANCE_FONT FONT_KEY_GOTHIC_18_BOLD
+  #define INSTRUCTION_FONT FONT_KEY_GOTHIC_14_BOLD
+#else // basalt, aplite
+  #define MAP_WIDTH 144
+  #define MAP_HEIGHT 112
+  #define HEADER_HEIGHT 24
+  #define FOOTER_HEIGHT 32
+  #define DISTANCE_FONT FONT_KEY_GOTHIC_18_BOLD
+  #define INSTRUCTION_FONT FONT_KEY_GOTHIC_14_BOLD
+#endif
+
 #define MAP_BUFFER_SIZE (MAP_WIDTH * MAP_HEIGHT)
 #define PERSIST_KEY_LANGUAGE 100
 
@@ -149,6 +170,7 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx, GPoint(0, bounds.size.h - 1), GPoint(bounds.size.w, bounds.size.h - 1));
   
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_CHALK)
   // Draw Zoom level text on top-right
   static char zoom_buf[8];
   snprintf(zoom_buf, sizeof(zoom_buf), "Z:%d", s_zoom_level);
@@ -178,6 +200,30 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
     graphics_context_set_fill_color(ctx, GColorRed);
     graphics_fill_rect(ctx, GRect(bounds.size.w - 102, 8, 6, 6), 3, GCornersAll);
   }
+#else
+  // On Basalt/Aplite (144px): Hide Zoom from header to save space
+  BatteryChargeState battery = battery_state_service_peek();
+  static char battery_buf[8];
+  snprintf(battery_buf, sizeof(battery_buf), "%d%%", battery.charge_percent);
+  graphics_context_set_text_color(ctx, GColorBlack);
+  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                     GRect(bounds.size.w - 35, 2, 30, 20),
+                     GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
+                     
+  // Draw GPS Status icon
+  if (s_gps_connected) {
+    graphics_context_set_fill_color(ctx, GColorIslamicGreen);
+  } else {
+    graphics_context_set_fill_color(ctx, GColorRed);
+  }
+  graphics_fill_rect(ctx, GRect(bounds.size.w - 47, 8, 6, 6), 3, GCornersAll);
+  
+  // Draw Recording Status dot
+  if (s_recording_active) {
+    graphics_context_set_fill_color(ctx, GColorRed);
+    graphics_fill_rect(ctx, GRect(bounds.size.w - 62, 8, 6, 6), 3, GCornersAll);
+  }
+#endif
   
   // Draw Arrow
   if (s_nav_bearing != -1) {
@@ -291,7 +337,7 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   graphics_draw_line(ctx, GPoint(10, row_h * 2), GPoint(bounds.size.w - 10, row_h * 2));
   
   // Vertical line in middle (spanning Row 0 and Row 1)
-  graphics_draw_line(ctx, GPoint(100, 5), GPoint(100, row_h * 2 - 5));
+  graphics_draw_line(ctx, GPoint(bounds.size.w / 2, 5), GPoint(bounds.size.w / 2, row_h * 2 - 5));
 }
 
 // Button Clicks Handlers
@@ -588,49 +634,55 @@ static void main_window_load(Window *window) {
   s_arrow_outer_path = gpath_create(&ARROW_OUTER_PATH_INFO);
   s_arrow_inner_path = gpath_create(&ARROW_INNER_PATH_INFO);
   
-  // 1. Header Layer (0 to 30px)
-  s_header_layer = layer_create(GRect(0, 0, bounds.size.w, 30));
+  // 1. Header Layer (0 to HEADER_HEIGHT)
+  s_header_layer = layer_create(GRect(0, 0, bounds.size.w, HEADER_HEIGHT));
   layer_set_update_proc(s_header_layer, header_update_proc);
   layer_add_child(window_layer, s_header_layer);
   
   // Distance text in header (left indent for arrow)
-  s_distance_layer = text_layer_create(GRect(35, 2, bounds.size.w - 125, 26));
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_CHALK)
+  s_distance_layer = text_layer_create(GRect(35, 2, bounds.size.w - 137, 26));
+#else
+  s_distance_layer = text_layer_create(GRect(32, 0, bounds.size.w - 94, 24));
+#endif
   text_layer_set_background_color(s_distance_layer, GColorClear);
   text_layer_set_text_color(s_distance_layer, GColorBlack);
-  text_layer_set_font(s_distance_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_font(s_distance_layer, fonts_get_system_font(DISTANCE_FONT));
   text_layer_set_text(s_distance_layer, s_distance_text);
   layer_add_child(s_header_layer, text_layer_get_layer(s_distance_layer));
   
-  // 2. Map Layer (30 to 180px)
-  s_map_layer = layer_create(GRect(0, 30, bounds.size.w, MAP_HEIGHT));
+  // 2. Map Layer
+  s_map_layer = layer_create(GRect(0, HEADER_HEIGHT, bounds.size.w, MAP_HEIGHT));
   layer_set_update_proc(s_map_layer, map_layer_update_proc);
   layer_add_child(window_layer, s_map_layer);
   
-  // 3. Footer Layer (180 to 228px)
-  s_footer_layer = layer_create(GRect(0, 180, bounds.size.w, 48));
+  // 3. Footer Layer
+  s_footer_layer = layer_create(GRect(0, HEADER_HEIGHT + MAP_HEIGHT, bounds.size.w, FOOTER_HEIGHT));
   layer_set_update_proc(s_footer_layer, footer_update_proc);
   layer_add_child(window_layer, s_footer_layer);
   
   // Instruction Text in Footer
-  s_instruction_layer = text_layer_create(GRect(6, 4, bounds.size.w - 12, 40));
+  s_instruction_layer = text_layer_create(GRect(6, 2, bounds.size.w - 12, FOOTER_HEIGHT - 4));
   text_layer_set_background_color(s_instruction_layer, GColorClear);
   text_layer_set_text_color(s_instruction_layer, GColorBlack);
-  text_layer_set_font(s_instruction_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(s_instruction_layer, fonts_get_system_font(INSTRUCTION_FONT));
   text_layer_set_text_alignment(s_instruction_layer, GTextAlignmentCenter);
   text_layer_set_text(s_instruction_layer, s_instruction_text);
   layer_add_child(s_footer_layer, text_layer_get_layer(s_instruction_layer));
   
-  // 4. Dashboard Layer (30 to 228px, overlays map and footer, hidden initially)
-  s_dashboard_layer = layer_create(GRect(0, 30, bounds.size.w, bounds.size.h - 30));
+  // 4. Dashboard Layer (overlays map and footer, hidden initially)
+  s_dashboard_layer = layer_create(GRect(0, HEADER_HEIGHT, bounds.size.w, bounds.size.h - HEADER_HEIGHT));
   layer_set_update_proc(s_dashboard_layer, dashboard_update_proc);
   layer_set_hidden(s_dashboard_layer, true); // hidden on launch
   layer_add_child(window_layer, s_dashboard_layer);
   
-  int dash_h = bounds.size.h - 30; // 198px
-  int row_h = dash_h / 3; // 66px
+  int dash_h = bounds.size.h - HEADER_HEIGHT;
+  int row_h = dash_h / 3;
+  int col_w = (bounds.size.w - 15) / 2;
+  int col2_x = col_w + 10;
   
   // Row 0: Left: Average Speed, Right: Remaining Distance
-  s_dash_avg_speed_title_layer = text_layer_create(GRect(5, 5, 90, 14));
+  s_dash_avg_speed_title_layer = text_layer_create(GRect(5, 2, col_w, 14));
   text_layer_set_background_color(s_dash_avg_speed_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_avg_speed_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_avg_speed_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -638,7 +690,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_avg_speed_title_layer, "Ø-GESCHWIND.");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_avg_speed_title_layer));
   
-  s_dash_avg_speed_val_layer = text_layer_create(GRect(5, 20, 90, 36));
+  s_dash_avg_speed_val_layer = text_layer_create(GRect(5, 16, col_w, row_h - 18));
   text_layer_set_background_color(s_dash_avg_speed_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_avg_speed_val_layer, GColorBlack);
   text_layer_set_font(s_dash_avg_speed_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
@@ -646,7 +698,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_avg_speed_val_layer));
   
-  s_dash_dist_title_layer = text_layer_create(GRect(105, 5, 90, 14));
+  s_dash_dist_title_layer = text_layer_create(GRect(col2_x, 2, col_w, 14));
   text_layer_set_background_color(s_dash_dist_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_dist_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -654,7 +706,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_dist_title_layer, "DISTANZ (G/R)");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_title_layer));
   
-  s_dash_dist_val_layer = text_layer_create(GRect(105, 20, 90, 36));
+  s_dash_dist_val_layer = text_layer_create(GRect(col2_x, 16, col_w, row_h - 18));
   text_layer_set_background_color(s_dash_dist_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_val_layer, GColorBlack);
   text_layer_set_font(s_dash_dist_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
@@ -663,7 +715,7 @@ static void main_window_load(Window *window) {
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_val_layer));
   
   // Row 1: Left: Elevation Gain, Right: Elevation Loss
-  s_dash_gain_title_layer = text_layer_create(GRect(5, row_h + 5, 90, 14));
+  s_dash_gain_title_layer = text_layer_create(GRect(5, row_h + 2, col_w, 14));
   text_layer_set_background_color(s_dash_gain_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_gain_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_gain_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -671,7 +723,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_gain_title_layer, "HM AUFSTIEG");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_gain_title_layer));
   
-  s_dash_gain_val_layer = text_layer_create(GRect(5, row_h + 20, 90, 36));
+  s_dash_gain_val_layer = text_layer_create(GRect(5, row_h + 16, col_w, row_h - 18));
   text_layer_set_background_color(s_dash_gain_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_gain_val_layer, GColorBlack);
   text_layer_set_font(s_dash_gain_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
@@ -679,7 +731,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_gain_val_layer));
   
-  s_dash_loss_title_layer = text_layer_create(GRect(105, row_h + 5, 90, 14));
+  s_dash_loss_title_layer = text_layer_create(GRect(col2_x, row_h + 2, col_w, 14));
   text_layer_set_background_color(s_dash_loss_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_loss_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_loss_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -687,7 +739,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_loss_title_layer, "HM ABSTIEG");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_loss_title_layer));
   
-  s_dash_loss_val_layer = text_layer_create(GRect(105, row_h + 20, 90, 36));
+  s_dash_loss_val_layer = text_layer_create(GRect(col2_x, row_h + 16, col_w, row_h - 18));
   text_layer_set_background_color(s_dash_loss_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_loss_val_layer, GColorBlack);
   text_layer_set_font(s_dash_loss_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
@@ -696,7 +748,7 @@ static void main_window_load(Window *window) {
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_loss_val_layer));
   
   // Row 2: GPS Coordinates
-  s_dash_coords_title_layer = text_layer_create(GRect(10, (row_h * 2) + 5, bounds.size.w - 20, 14));
+  s_dash_coords_title_layer = text_layer_create(GRect(10, (row_h * 2) + 2, bounds.size.w - 20, 14));
   text_layer_set_background_color(s_dash_coords_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_coords_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_coords_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -704,7 +756,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_coords_title_layer, "GPS KOORDINATEN");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_coords_title_layer));
   
-  s_dash_coords_val_layer = text_layer_create(GRect(10, (row_h * 2) + 20, bounds.size.w - 20, 36));
+  s_dash_coords_val_layer = text_layer_create(GRect(10, (row_h * 2) + 16, bounds.size.w - 20, row_h - 18));
   text_layer_set_background_color(s_dash_coords_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_coords_val_layer, GColorBlack);
   text_layer_set_font(s_dash_coords_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
