@@ -77,6 +77,26 @@ function getBearing(lat1, lon1, lat2, lon2) {
   return (brng + 360) % 360;
 }
 
+// Get tile URL based on chosen map source
+function getTileUrl(z, x, y) {
+  var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
+  var subdomains, sub;
+  
+  if (mapSource === 'hikebikemap') {
+    return 'https://tiles.wmflabs.org/hikebike/' + z + '/' + x + '/' + y + '.png';
+  } else if (mapSource === 'mtbmap') {
+    return 'http://tile.mtbmap.cz/mtbmap_tiles/' + z + '/' + x + '/' + y + '.png';
+  } else if (mapSource === 'osm') {
+    subdomains = ['a', 'b', 'c'];
+    sub = subdomains[Math.floor(Math.random() * 3)];
+    return 'https://' + sub + '.tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png';
+  } else { // opentopomap
+    subdomains = ['a', 'b', 'c'];
+    sub = subdomains[Math.floor(Math.random() * 3)];
+    return 'https://' + sub + '.tile.opentopomap.org/' + z + '/' + x + '/' + y + '.png';
+  }
+}
+
 // Initialize the Pebble application
 Pebble.addEventListener('ready', function() {
   console.log('TopoNav PebbleKit JS is ready!');
@@ -153,6 +173,7 @@ Pebble.addEventListener('ready', function() {
 function openConfigPage(downloadGpxData, downloadName) {
   var interval = localStorage.getItem('gpsInterval') || '5';
   var lang = localStorage.getItem('language') || 'de';
+  var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
   var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
   
   // Serialize only metadata to stay within query param limits
@@ -186,6 +207,7 @@ function openConfigPage(downloadGpxData, downloadName) {
   var url = 'https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config.html?v=' + Date.now() + 
             '&interval=' + interval + 
             '&lang=' + lang + 
+            '&map=' + mapSource + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
             '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
             '&routes=' + encodeURIComponent(JSON.stringify(routesMeta)) +
@@ -456,6 +478,17 @@ Pebble.addEventListener('webviewclosed', function(e) {
       
       var lang = settings.language || 'de';
       localStorage.setItem('language', lang);
+      
+      var mapSource = settings.mapSource || 'opentopomap';
+      var oldMapSource = localStorage.getItem('mapSource') || 'opentopomap';
+      localStorage.setItem('mapSource', mapSource);
+      
+      if (mapSource !== oldMapSource) {
+        console.log('Map source changed from ' + oldMapSource + ' to ' + mapSource + '. Triggering map reload.');
+        // Force reload by clearing memory cache first (optional, but good practice since memory cache keys are style-agnostic)
+        isSendingMap = false; // Reset map sending locks if any
+        // We will call updateWatchNavigationAndMap() later in the handler, but doing it here guarantees immediate response.
+      }
       
       if (settings.newRoute) {
         var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
@@ -827,20 +860,22 @@ function renderAndSendMap() {
   
   // 1. Identify which tiles are needed for the current viewport
   var centerPix = graphics.latLonToPixels(currentLocation.lat, currentLocation.lon, currentZoom);
-  var tlX = centerPix.x - 100;
-  var tlY = centerPix.y - 75;
+  var tlX = centerPix.x - MAP_WIDTH / 2;
+  var tlY = centerPix.y - MAP_HEIGHT / 2;
   var tileXMin = Math.floor(tlX / 256);
-  var tileXMax = Math.floor((tlX + 200) / 256);
+  var tileXMax = Math.floor((tlX + MAP_WIDTH) / 256);
   var tileYMin = Math.floor(tlY / 256);
-  var tileYMax = Math.floor((tlY + 150) / 256);
+  var tileYMax = Math.floor((tlY + MAP_HEIGHT) / 256);
   
   var tileCache = {};
   var tilesToFetch = [];
+  var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
   
   for (var tx = tileXMin; tx <= tileXMax; tx++) {
     for (var ty = tileYMin; ty <= tileYMax; ty++) {
       var key = currentZoom + '/' + tx + '/' + ty;
-      var cachedBase64 = localStorage.getItem('tile_' + key);
+      var storeKey = 'tile_' + mapSource + '_' + key;
+      var cachedBase64 = localStorage.getItem(storeKey);
       
       if (cachedBase64) {
         try {
@@ -870,9 +905,7 @@ function renderAndSendMap() {
     }
     
     tilesToFetch.forEach(function(item) {
-      var subdomains = ['a', 'b', 'c'];
-      var sub = subdomains[Math.floor(Math.random() * 3)];
-      var url = 'https://' + sub + '.tile.opentopomap.org/' + item.z + '/' + item.x + '/' + item.y + '.png';
+      var url = getTileUrl(item.z, item.x, item.y);
       
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
@@ -887,7 +920,7 @@ function renderAndSendMap() {
             
             // Cache downloaded tile in localStorage
             var base64 = arrayBufferToBase64(xhr.response);
-            localStorage.setItem('tile_' + item.key, base64);
+            localStorage.setItem('tile_' + mapSource + '_' + item.key, base64);
           } catch (e) {
             console.log('Error decoding fetched tile ' + item.key + ': ' + e);
           }
@@ -997,8 +1030,9 @@ function cacheTrackTiles(track) {
       return;
     }
     
+    var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
     var item = tileKeys[idx];
-    var storeKey = 'tile_' + item.key;
+    var storeKey = 'tile_' + mapSource + '_' + item.key;
     
     if (localStorage.getItem(storeKey)) {
       idx++;
@@ -1006,9 +1040,7 @@ function cacheTrackTiles(track) {
       return;
     }
     
-    var subdomains = ['a', 'b', 'c'];
-    var sub = subdomains[Math.floor(Math.random() * 3)];
-    var url = 'https://' + sub + '.tile.opentopomap.org/' + item.z + '/' + item.x + '/' + item.y + '.png';
+    var url = getTileUrl(item.z, item.x, item.y);
     
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
