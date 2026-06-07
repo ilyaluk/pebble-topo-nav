@@ -168,16 +168,15 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, close
       
       // Draw line. Gray out walked parts (k < closestIdx)
       if (closestIdx !== undefined && closestIdx !== null && k < closestIdx) {
-        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 128, 128, 128); // 3px grey line
+        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 5, 120, 120, 120); // 5px darker grey line
       } else {
-        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 255, 85, 0); // 3px orange line
+        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 5, 255, 60, 0); // 5px bright orange line
       }
     }
   }
   
-  // 6. Render user position marker (Blue dot at center with white border)
+  // 6. Render user position marker (No longer drawn here - watch draws it dynamically)
   // Center is always (MAP_WIDTH / 2, MAP_HEIGHT / 2) -> (100, 75)
-  drawCircle(rgbaBuffer, MAP_WIDTH / 2, MAP_HEIGHT / 2, 4, 0, 100, 255, 255, 255, 255, 2);
   
   // 7. Convert viewport RGBA buffer to Pebble-compatible GColor8 buffer (30,000 bytes)
   var gcolor8Buffer = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);

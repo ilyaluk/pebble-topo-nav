@@ -1,8 +1,10 @@
 {
   "name": "pebble-topo-nav",
   "author": "Antigravity",
-  "version": "1.0.0",
-  "keywords": ["pebble-app"],
+  "version": "1.2.0",
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
   "dependencies": {},
   "pebble": {
@@ -10,7 +12,12 @@
     "uuid": "4f84c311-665e-4ad2-abdf-cbb612f0e4b7",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "targetPlatforms": ["aplite", "basalt", "chalk", "emery"],
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "emery"
+    ],
     "watchapp": {
       "watchface": false
     },
@@ -30,11 +37,22 @@
       "ELEVATION_LOSS",
       "TRIP_DISTANCE",
       "VIBRATE_ALERT",
-      "GPS_COORDS"
+      "GPS_COORDS",
+      "LANGUAGE",
+      "RECORDING_STATE",
+      "GPS_SPEED",
+      "GPS_HEADING",
+      "ROUTE_COUNT",
+      "ROUTE_INDEX",
+      "ROUTE_ID",
+      "ROUTE_NAME",
+      "ACTIVE_ROUTE_ID"
     ],
     "resources": {
       "media": []
     },
-    "capabilities": ["configurable"]
+    "capabilities": [
+      "configurable"
+    ]
   }
 }

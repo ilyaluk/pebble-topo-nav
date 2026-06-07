@@ -172,46 +172,156 @@
       border: 1px solid rgba(244, 67, 54, 0.3);
       display: block;
     }
+
+    .trip-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .trip-item:last-child {
+      border-bottom: none;
+    }
+    .trip-info {
+      flex-grow: 1;
+      margin-right: 15px;
+    }
+    .trip-date {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .trip-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .trip-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .trip-btn {
+      background-color: #2b2b2b;
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .trip-btn:hover {
+      background-color: var(--primary);
+      color: white;
+    }
+    .trip-btn.danger:hover {
+      background-color: var(--error);
+      color: white;
+    }
+    .nav-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--text-muted);
+    }
+    .status-dot.active {
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+    .nav-text {
+      font-size: 14px;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h1>TopoNav Einstellungen</h1>
+  <h1 id="page-title">TopoNav Einstellungen</h1>
+
+  <!-- Navigation Control -->
+  <div class="card">
+    <div class="card-title" id="card-nav">Navigation & Aufzeichnung</div>
+    <div class="nav-status">
+      <div id="nav-dot" class="status-dot"></div>
+      <span id="nav-status-text" class="nav-text">Inaktiv</span>
+    </div>
+    <button id="toggle-nav-btn" class="btn" style="margin-top: 0; background-color: var(--success);">Aufzeichnung starten</button>
+  </div>
 
   <!-- General Settings -->
   <div class="card">
-    <div class="card-title">Allgemein</div>
+    <div class="card-title" id="card-general">Allgemein</div>
     
-    <label for="gps-interval">GPS-Aktualisierungsintervall</label>
+    <label for="gps-interval" id="label-gps-interval">GPS-Aktualisierungsintervall</label>
     <select id="gps-interval">
       <option value="5" selected>5 Sekunden (Präzise, mehr Akku)</option>
       <option value="10">10 Sekunden (Ausgeglichen)</option>
       <option value="30">30 Sekunden (Stromsparend)</option>
     </select>
+    
+    <label for="app-lang" id="label-app-lang" style="margin-top: 15px;">App-Sprache / App Language</label>
+    <select id="app-lang">
+      <option value="de" selected>Deutsch</option>
+      <option value="en">English</option>
+    </select>
   </div>
 
   <!-- GPX Import -->
   <div class="card">
-    <div class="card-title">GPX-Route</div>
+    <div class="card-title" id="card-gpx">GPX-Route</div>
     
     <!-- Method A: File Upload (for supported platforms/browsers) -->
-    <label>Methode A: GPX-Datei auswählen</label>
+    <label id="label-method-a">Methode A: GPX-Datei auswählen</label>
     <div id="dropzone" class="dropzone">
       <p id="dropzone-text">Klicke zum Auswählen oder ziehe eine GPX-Datei hierher</p>
-      <span>Erlaubte Formate: .gpx</span>
+      <span id="formats-span">Erlaubte Formate: .gpx</span>
       <input type="file" id="gpx-file" accept=".gpx">
     </div>
     
-    <div style="text-align: center; margin: 15px 0; color: var(--text-muted); font-size: 13px; font-weight: bold;">— ODER —</div>
+    <div id="or-div" style="text-align: center; margin: 15px 0; color: var(--text-muted); font-size: 13px; font-weight: bold;">— ODER —</div>
     
     <!-- Method B: Text Area Fallback (for standard mobile webviews) -->
-    <label for="gpx-text">Methode B: GPX-Inhalt kopieren & einfügen (für Smartphones)</label>
+    <label for="gpx-text" id="label-method-b">Methode B: GPX-Inhalt kopieren & einfügen (für Smartphones)</label>
     <textarea id="gpx-text" placeholder="Öffne die .gpx Datei in einer Text-App auf deinem Handy, kopiere den gesamten XML-Inhalt und füge ihn hier ein..." rows="6" style="width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 12px; border-radius: 8px; font-size: 13px; box-sizing: border-box; outline: none; resize: vertical; font-family: monospace; margin-top: 5px;"></textarea>
     
+    <label for="route-name-input" id="label-route-name" style="margin-top: 15px;">Name der Route (optional)</label>
+    <input type="text" id="route-name-input" placeholder="z.B. Harz Wanderung" style="width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 10px; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; margin-top: 5px; margin-bottom: 10px;">
+
     <button id="clear-btn" class="btn" style="background-color: var(--error); margin-top: 15px; font-size: 14px; padding: 8px 12px;">Aktuelle Route entfernen</button>
     
     <div id="status-msg" class="status-msg"></div>
+  </div>
+
+  <!-- Saved Trips -->
+  <div class="card">
+    <div class="card-title" id="card-trips">Aufgezeichnete Touren</div>
+    <div id="trips-list">
+      <!-- Dynamically filled -->
+    </div>
+    <div id="no-trips-text" style="color: var(--text-muted); font-size: 14px; text-align: center; padding: 15px 0;">Keine Touren aufgezeichnet.</div>
+  </div>
+
+  <!-- Saved Routes -->
+  <div class="card">
+    <div class="card-title" id="card-saved-routes">Gespeicherte Routen</div>
+    <div id="routes-list">
+      <!-- Dynamically filled -->
+    </div>
+    <div id="no-routes-text" style="color: var(--text-muted); font-size: 14px; text-align: center; padding: 15px 0;">Keine Routen gespeichert.</div>
   </div>
 
   <button id="save-btn" class="btn">Speichern</button>
@@ -222,6 +332,136 @@
   var trackPoints = [];
   var gpxUploaded = false;
   var gpxCleared = false;
+
+  var translations = {
+    de: {
+      title: "TopoNav Einstellungen",
+      general: "Allgemein",
+      gpsInterval: "GPS-Aktualisierungsintervall",
+      gps5: "5 Sekunden (Präzise, mehr Akku)",
+      gps10: "10 Sekunden (Ausgeglichen)",
+      gps30: "30 Sekunden (Stromsparend)",
+      langLabel: "App-Sprache / App Language",
+      gpxRoute: "GPX-Route",
+      methodA: "Methode A: GPX-Datei auswählen",
+      dropzoneText: "Klicke zum Auswählen oder ziehe eine GPX-Datei hierher",
+      formats: "Erlaubte Formate: .gpx",
+      orText: "— ODER —",
+      methodB: "Methode B: GPX-Inhalt kopieren & einfügen (für Smartphones)",
+      textareaPlaceholder: "Öffne die .gpx Datei in einer Text-App auf deinem Handy, kopiere den gesamten XML-Inhalt und füge ihn hier ein...",
+      clearBtn: "Aktuelle Route entfernen",
+      saveBtn: "Speichern",
+      statusErrorFile: "Fehler: Bitte wähle eine valide .gpx Datei.",
+      statusReading: "Lese {name}...",
+      statusPoints: " Punkte",
+      statusXmlError: "Fehler beim Parsen: Ungültiges XML-Format.",
+      statusNoTrkpt: "Fehler: Keine <trkpt>-Elemente (Trackpoints) in den GPX-Daten gefunden.",
+      statusNoCoords: "Fehler: Trackpoints enthalten keine Koordinaten (lat/lon).",
+      statusSuccess: "GPX-Daten erfolgreich geladen! {raw} Punkte wurden auf {reduced} reduziert.",
+      statusCleared: "Route entfernt. Klicke auf 'Speichern', um die Änderung auf der Uhr zu übernehmen.",
+      cardNav: "Navigation & Aufzeichnung",
+      navActive: "Aufzeichnung läuft...",
+      navInactive: "Aufzeichnung inaktiv",
+      btnStartNav: "Aufzeichnung starten",
+      btnStopNav: "Aufzeichnung stoppen",
+      cardTrips: "Aufgezeichnete Touren",
+      noTrips: "Keine Touren aufgezeichnet.",
+      btnDownload: "GPX herunterladen",
+      btnDelete: "Löschen",
+      tripDistance: "Distanz",
+      tripDuration: "Dauer",
+      tripPoints: "Punkte",
+      cardSavedRoutes: "Gespeicherte Routen",
+      noRoutes: "Keine Routen gespeichert.",
+      btnActivate: "Aktivieren",
+      activeLabel: "Aktiv"
+    },
+    en: {
+      title: "TopoNav Settings",
+      general: "General",
+      gpsInterval: "GPS Update Interval",
+      gps5: "5 Seconds (Precise, more battery)",
+      gps10: "10 Seconds (Balanced)",
+      gps30: "30 Seconds (Power saving)",
+      langLabel: "App Language / App-Sprache",
+      gpxRoute: "GPX Route",
+      methodA: "Method A: Select GPX file",
+      dropzoneText: "Click to select or drag and drop a GPX file here",
+      formats: "Allowed formats: .gpx",
+      orText: "— OR —",
+      methodB: "Method B: Copy & paste GPX content (for smartphones)",
+      textareaPlaceholder: "Open the .gpx file in a text app on your phone, copy the entire XML content and paste it here...",
+      clearBtn: "Remove current route",
+      saveBtn: "Save",
+      statusErrorFile: "Error: Please select a valid .gpx file.",
+      statusReading: "Reading {name}...",
+      statusPoints: " points",
+      statusXmlError: "Parse Error: Invalid XML format.",
+      statusNoTrkpt: "Error: No <trkpt> elements (trackpoints) found in the GPX data.",
+      statusNoCoords: "Error: Trackpoints do not contain coordinates (lat/lon).",
+      statusSuccess: "GPX data successfully loaded! {raw} points reduced to {reduced}.",
+      statusCleared: "Route removed. Click 'Save' to apply the change on the watch.",
+      cardNav: "Navigation & Recording",
+      navActive: "Recording active...",
+      navInactive: "Recording inactive",
+      btnStartNav: "Start Recording",
+      btnStopNav: "Stop Recording",
+      cardTrips: "Recorded Trips",
+      noTrips: "No recorded trips.",
+      btnDownload: "Download GPX",
+      btnDelete: "Delete",
+      tripDistance: "Distance",
+      tripDuration: "Duration",
+      tripPoints: "Points",
+      cardSavedRoutes: "Saved Routes",
+      noRoutes: "No saved routes.",
+      btnActivate: "Activate",
+      activeLabel: "Active"
+    }
+  };
+
+  function getActiveLang() {
+    return document.getElementById("app-lang").value;
+  }
+
+  function applyLanguage(lang) {
+    var t = translations[lang] || translations.de;
+    document.getElementById("page-title").innerText = t.title;
+    document.getElementById("card-general").innerText = t.general;
+    document.getElementById("label-gps-interval").innerText = t.gpsInterval;
+    
+    var intervalSelect = document.getElementById("gps-interval");
+    intervalSelect.options[0].text = t.gps5;
+    intervalSelect.options[1].text = t.gps10;
+    intervalSelect.options[2].text = t.gps30;
+    
+    document.getElementById("label-app-lang").innerText = t.langLabel;
+    document.getElementById("card-gpx").innerText = t.gpxRoute;
+    document.getElementById("label-method-a").innerText = t.methodA;
+    
+    if (!gpxUploaded && !gpxCleared) {
+      document.getElementById("dropzone-text").innerText = t.dropzoneText;
+    }
+    document.getElementById("formats-span").innerText = t.formats;
+    document.getElementById("or-div").innerText = t.orText;
+    document.getElementById("label-method-b").innerText = t.methodB;
+    document.getElementById("gpx-text").placeholder = t.textareaPlaceholder;
+    document.getElementById("clear-btn").innerText = t.clearBtn;
+    document.getElementById("save-btn").innerText = t.saveBtn;
+
+    // Translate new items
+    document.getElementById("card-nav").innerText = t.cardNav;
+    document.getElementById("card-trips").innerText = t.cardTrips;
+    document.getElementById("no-trips-text").innerText = t.noTrips;
+    
+    document.getElementById("card-saved-routes").innerText = t.cardSavedRoutes;
+    document.getElementById("no-routes-text").innerText = t.noRoutes;
+    document.getElementById("label-route-name").innerText = lang === "de" ? "Name der Route (optional)" : "Route Name (optional)";
+    
+    updateNavStatusUI();
+    renderTripsList();
+    renderRoutesList();
+  }
 
   // UI elements
   var dropzone = document.getElementById("dropzone");
@@ -255,19 +495,21 @@
 
   // Read file via FileReader
   function handleFile(file) {
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
     if (!file.name.endsWith(".gpx")) {
-      showStatus("Fehler: Bitte wähle eine valide .gpx Datei.", "error");
+      showStatus(t.statusErrorFile, "error");
       return;
     }
-    dropzoneText.innerText = "Lese " + file.name + "...";
+    dropzoneText.innerText = t.statusReading.replace("{name}", file.name);
     
     var reader = new FileReader();
     reader.onload = function(e) {
       parseGPXText(e.target.result);
       if (trackPoints.length > 0) {
-        dropzoneText.innerText = file.name + " (" + trackPoints.length + " Punkte)";
+        dropzoneText.innerText = file.name + " (" + trackPoints.length + t.statusPoints + ")";
       } else {
-        dropzoneText.innerText = "Klicke zum Auswählen oder ziehe eine GPX-Datei hierher";
+        dropzoneText.innerText = t.dropzoneText;
       }
     };
     reader.readAsText(file);
@@ -290,19 +532,23 @@
 
   // Handle clearing the GPX route
   clearBtn.addEventListener("click", function(e) {
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
     e.preventDefault();
     trackPoints = [];
     gpxUploaded = false;
     gpxCleared = true;
     gpxInput.value = "";
     gpxTextArea.value = "";
-    dropzoneText.innerText = "Klicke zum Auswählen oder ziehe eine GPX-Datei hierher";
-    showStatus("Route entfernt. Klicke auf 'Speichern', um die Änderung auf der Uhr zu übernehmen.", "success");
+    dropzoneText.innerText = t.dropzoneText;
+    showStatus(t.statusCleared, "success");
     saveBtn.disabled = false;
   });
 
   // Parse GPX from raw string
   function parseGPXText(gpxText) {
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
     try {
       var parser = new DOMParser();
       var xmlDoc = parser.parseFromString(gpxText, "text/xml");
@@ -310,14 +556,14 @@
       // Basic check for XML parsing errors
       var parserError = xmlDoc.getElementsByTagName("parsererror");
       if (parserError.length > 0) {
-        showStatus("Fehler beim Parsen: Ungültiges XML-Format.", "error");
+        showStatus(t.statusXmlError, "error");
         saveBtn.disabled = true;
         return;
       }
 
       var trkpts = xmlDoc.getElementsByTagName("trkpt");
       if (trkpts.length === 0) {
-        showStatus("Fehler: Keine <trkpt>-Elemente (Trackpoints) in den GPX-Daten gefunden.", "error");
+        showStatus(t.statusNoTrkpt, "error");
         saveBtn.disabled = true;
         return;
       }
@@ -338,7 +584,7 @@
       }
 
       if (rawPoints.length === 0) {
-        showStatus("Fehler: Trackpoints enthalten keine Koordinaten (lat/lon).", "error");
+        showStatus(t.statusNoCoords, "error");
         saveBtn.disabled = true;
         return;
       }
@@ -348,10 +594,10 @@
       
       gpxUploaded = true;
       gpxCleared = false;
-      showStatus("GPX-Daten erfolgreich geladen! " + rawPoints.length + " Punkte wurden auf " + trackPoints.length + " reduziert.", "success");
+      showStatus(t.statusSuccess.replace("{raw}", rawPoints.length).replace("{reduced}", trackPoints.length), "success");
       saveBtn.disabled = false;
     } catch (err) {
-      showStatus("Fehler: " + err.message, "error");
+      showStatus("Fehler / Error: " + err.message, "error");
       saveBtn.disabled = true;
     }
   }
@@ -405,17 +651,120 @@
     statusMsg.className = "status-msg " + type;
   }
 
+  // Saved routes list rendering
+  var routesParam = getQueryParam("routes");
+  var savedRoutesMeta = [];
+  if (routesParam) {
+    try {
+      savedRoutesMeta = JSON.parse(decodeURIComponent(routesParam));
+    } catch(e) {
+      console.log('Error parsing routes parameter: ' + e);
+    }
+  }
+  
+  var activeRouteId = parseInt(getQueryParam("active_route_id") || "0", 10);
+
+  function renderRoutesList() {
+    var listContainer = document.getElementById("routes-list");
+    var noRoutesText = document.getElementById("no-routes-text");
+    listContainer.innerHTML = "";
+    
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
+    
+    if (!savedRoutesMeta || savedRoutesMeta.length === 0) {
+      noRoutesText.style.display = "block";
+      return;
+    }
+    
+    noRoutesText.style.display = "none";
+    
+    savedRoutesMeta.forEach(function(route) {
+      var item = document.createElement("div");
+      item.className = "trip-item";
+      
+      var info = document.createElement("div");
+      info.className = "trip-info";
+      
+      var nameDiv = document.createElement("div");
+      nameDiv.className = "trip-date";
+      nameDiv.innerText = route.name;
+      
+      var metaDiv = document.createElement("div");
+      metaDiv.className = "trip-meta";
+      var distKm = (route.distance / 1000).toFixed(2);
+      metaDiv.innerText = t.tripDistance + ": " + distKm + " km | " + t.tripPoints + ": " + route.pointsCount;
+      
+      info.appendChild(nameDiv);
+      info.appendChild(metaDiv);
+      
+      var actions = document.createElement("div");
+      actions.className = "trip-actions";
+      
+      var isActive = (route.id === activeRouteId);
+      
+      if (isActive) {
+        var activeSpan = document.createElement("span");
+        activeSpan.className = "nav-text";
+        activeSpan.style.color = "var(--success)";
+        activeSpan.style.fontWeight = "bold";
+        activeSpan.style.marginRight = "10px";
+        activeSpan.innerText = t.activeLabel;
+        actions.appendChild(activeSpan);
+        
+        var deactBtn = document.createElement("button");
+        deactBtn.className = "trip-btn";
+        deactBtn.innerText = lang === "de" ? "Stoppen" : "Stop";
+        deactBtn.addEventListener("click", function() {
+          window.location.href = "pebblejs://close#activate_route_0";
+        });
+        actions.appendChild(deactBtn);
+      } else {
+        var actBtn = document.createElement("button");
+        actBtn.className = "trip-btn";
+        actBtn.innerText = t.btnActivate;
+        actBtn.addEventListener("click", function() {
+          window.location.href = "pebblejs://close#activate_route_" + route.id;
+        });
+        actions.appendChild(actBtn);
+      }
+      
+      var delBtn = document.createElement("button");
+      delBtn.className = "trip-btn danger";
+      delBtn.innerText = t.btnDelete;
+      delBtn.addEventListener("click", function() {
+        if (confirm(lang === "de" ? "Diese Route wirklich löschen?" : "Really delete this route?")) {
+          window.location.href = "pebblejs://close#delete_route_" + route.id;
+        }
+      });
+      
+      actions.appendChild(delBtn);
+      
+      item.appendChild(info);
+      item.appendChild(actions);
+      listContainer.appendChild(item);
+    });
+  }
+
   // Submit and Close WebView
   saveBtn.addEventListener("click", function() {
     var gpsInterval = parseInt(document.getElementById("gps-interval").value);
+    var appLang = document.getElementById("app-lang").value;
     
     var settings = {
-      gpsInterval: gpsInterval
+      gpsInterval: gpsInterval,
+      language: appLang
     };
+    
     if (gpxCleared) {
       settings.gpxTrack = [];
-    } else if (gpxUploaded) {
-      settings.gpxTrack = trackPoints;
+    } else if (gpxUploaded && trackPoints.length > 0) {
+      var nameInput = document.getElementById("route-name-input").value.trim();
+      var rName = nameInput || ("Route " + (new Date().toLocaleDateString()));
+      settings.newRoute = {
+        name: rName,
+        points: trackPoints
+      };
     }
     
     // Redirect to pebblejs schema to pass data to phone companion
@@ -440,6 +789,240 @@
   if (initialInterval) {
     document.getElementById("gps-interval").value = initialInterval;
   }
+  
+  var initialLang = getQueryParam("lang");
+  if (initialLang) {
+    document.getElementById("app-lang").value = initialLang;
+  }
+  
+  // Listen for language dropdown change
+  document.getElementById("app-lang").addEventListener("change", function() {
+    applyLanguage(this.value);
+  });
+  
+  // Navigation active state control
+  var isNavActive = getQueryParam("is_nav") === "true";
+  
+  function updateNavStatusUI() {
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
+    var dot = document.getElementById("nav-dot");
+    var statusText = document.getElementById("nav-status-text");
+    var btn = document.getElementById("toggle-nav-btn");
+    
+    if (isNavActive) {
+      dot.className = "status-dot active";
+      statusText.innerText = t.navActive;
+      btn.innerText = t.btnStopNav;
+      btn.style.backgroundColor = "var(--error)";
+    } else {
+      dot.className = "status-dot";
+      statusText.innerText = t.navInactive;
+      btn.innerText = t.btnStartNav;
+      btn.style.backgroundColor = "var(--success)";
+    }
+  }
+  
+  document.getElementById("toggle-nav-btn").addEventListener("click", function(e) {
+    e.preventDefault();
+    window.location.href = "pebblejs://close#toggle_nav";
+  });
+
+  // Saved trips list rendering
+  var tripsParam = getQueryParam("trips");
+  var savedTripsMeta = [];
+  if (tripsParam) {
+    try {
+      savedTripsMeta = JSON.parse(decodeURIComponent(tripsParam));
+    } catch(e) {
+      console.log('Error parsing trips param: ' + e);
+    }
+  }
+
+  function renderTripsList() {
+    var listContainer = document.getElementById("trips-list");
+    var noTripsText = document.getElementById("no-trips-text");
+    listContainer.innerHTML = "";
+    
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
+    
+    if (!savedTripsMeta || savedTripsMeta.length === 0) {
+      noTripsText.style.display = "block";
+      return;
+    }
+    
+    noTripsText.style.display = "none";
+    
+    savedTripsMeta.forEach(function(trip) {
+      var item = document.createElement("div");
+      item.className = "trip-item";
+      
+      var info = document.createElement("div");
+      info.className = "trip-info";
+      
+      var dateDiv = document.createElement("div");
+      dateDiv.className = "trip-date";
+      var dateObj = new Date(trip.date);
+      dateDiv.innerText = dateObj.toLocaleDateString(lang === "de" ? "de-DE" : "en-US") + " " + dateObj.toLocaleTimeString(lang === "de" ? "de-DE" : "en-US", {hour: '2-digit', minute:'2-digit'});
+      
+      var metaDiv = document.createElement("div");
+      metaDiv.className = "trip-meta";
+      
+      var distKm = (trip.distance / 1000).toFixed(2);
+      var durationMin = Math.round(trip.duration / 60);
+      var durStr = durationMin + " min";
+      if (durationMin >= 60) {
+        var h = Math.floor(durationMin / 60);
+        var m = durationMin % 60;
+        durStr = h + "h " + m + "m";
+      }
+      
+      metaDiv.innerText = t.tripDistance + ": " + distKm + " km | " + t.tripDuration + ": " + durStr + " | " + t.tripPoints + ": " + trip.pointsCount;
+      
+      info.appendChild(dateDiv);
+      info.appendChild(metaDiv);
+      
+      var actions = document.createElement("div");
+      actions.className = "trip-actions";
+      
+      var dlBtn = document.createElement("button");
+      dlBtn.className = "trip-btn";
+      dlBtn.innerText = t.btnDownload;
+      dlBtn.addEventListener("click", function() {
+        window.location.href = "pebblejs://close#download_" + trip.id;
+      });
+      
+      var delBtn = document.createElement("button");
+      delBtn.className = "trip-btn danger";
+      delBtn.innerText = t.btnDelete;
+      delBtn.addEventListener("click", function() {
+        if (confirm(lang === "de" ? "Diese Tour wirklich löschen?" : "Really delete this trip?")) {
+          window.location.href = "pebblejs://close#delete_" + trip.id;
+        }
+      });
+      
+      actions.appendChild(dlBtn);
+      actions.appendChild(delBtn);
+      
+      item.appendChild(info);
+      item.appendChild(actions);
+      listContainer.appendChild(item);
+    });
+  }
+
+  // Decompression of coordinates
+  function decompressTrack(compressedStr) {
+    if (!compressedStr) return [];
+    var segments = compressedStr.split('|');
+    var points = [];
+    var lastLat = 0;
+    var lastLon = 0;
+    var lastEle = 0;
+    var lastTime = 0;
+    
+    for (var i = 0; i < segments.length; i++) {
+      var parts = segments[i].split(',');
+      if (parts.length < 4) continue;
+      
+      var dLat = parseInt(parts[0], 10);
+      var dLon = parseInt(parts[1], 10);
+      var dEle = parseInt(parts[2], 10);
+      var dTime = parseInt(parts[3], 10);
+      
+      if (i === 0) {
+        lastLat = dLat;
+        lastLon = dLon;
+        lastEle = dEle;
+        lastTime = dTime;
+      } else {
+        lastLat += dLat;
+        lastLon += dLon;
+        lastEle += dEle;
+        lastTime += dTime;
+      }
+      
+      points.push({
+        lat: lastLat / 1000000,
+        lon: lastLon / 1000000,
+        ele: lastEle,
+        time: lastTime
+      });
+    }
+    return points;
+  }
+
+  // Generate GPX XML content
+  function generateGpxXml(points) {
+    var xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<gpx version="1.1" creator="TopoNav" xmlns="http://www.topografix.com/GPX/1/1">\n';
+    xml += '  <trk>\n';
+    xml += '    <name>TopoNav Walked Track</name>\n';
+    xml += '    <trkseg>\n';
+    
+    for (var i = 0; i < points.length; i++) {
+      var p = points[i];
+      var timeStr = new Date(p.time).toISOString();
+      xml += '      <trkpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lon.toFixed(6) + '">\n';
+      xml += '        <ele>' + p.ele + '</ele>\n';
+      xml += '        <time>' + timeStr + '</time>\n';
+      xml += '      </trkpt>\n';
+    }
+    
+    xml += '    </trkseg>\n';
+    xml += '  </trk>\n';
+    xml += '</gpx>\n';
+    return xml;
+  }
+
+  // Trigger download of files in webview
+  function triggerFileDownload(content, filename) {
+    var blob = new Blob([content], { type: 'application/gpx+xml;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename + ".gpx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Check for download triggers
+  var downloadData = getQueryParam("download_gpx");
+  var downloadName = getQueryParam("download_name") || "route";
+  if (downloadData) {
+    try {
+      var pts = decompressTrack(downloadData);
+      if (pts.length > 0) {
+        var gpxXml = generateGpxXml(pts);
+        triggerFileDownload(gpxXml, downloadName);
+        
+        // Clean URL params to prevent repeated downloads on refresh
+        if (window.history.replaceState) {
+          var cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+          var interval = getQueryParam("interval");
+          var lang = getQueryParam("lang");
+          var isNav = getQueryParam("is_nav");
+          var trips = getQueryParam("trips");
+          var params = [];
+          if (interval) params.push("interval=" + interval);
+          if (lang) params.push("lang=" + lang);
+          if (isNav) params.push("is_nav=" + isNav);
+          if (trips) params.push("trips=" + trips);
+          if (params.length > 0) {
+            cleanUrl += "?" + params.join("&");
+          }
+          window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+        }
+      }
+    } catch (e) {
+      console.error('Download failed: ' + e.message);
+    }
+  }
+
+  // Apply language at start
+  applyLanguage(document.getElementById("app-lang").value);
 </script>
 
 </body>

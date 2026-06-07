@@ -4,6 +4,7 @@
 #define MAP_WIDTH 200
 #define MAP_HEIGHT 150
 #define MAP_BUFFER_SIZE (MAP_WIDTH * MAP_HEIGHT)
+#define PERSIST_KEY_LANGUAGE 100
 
 // UI Elements
 static Window *s_main_window;
@@ -28,10 +29,48 @@ static TextLayer *s_dash_coords_val_layer;
 
 // State Variables
 static bool s_show_dashboard = false;
-static uint8_t s_zoom_level = 15;
+static uint8_t s_zoom_level = 17;
 static bool s_gps_connected = false;
 static bool s_off_route = false;
+static bool s_recording_active = false;
 static int s_nav_bearing = -1; // -1 = no instruction, 0 = straight, 90 = right, 180 = uturn, 270 = left
+static bool s_is_english = false;
+static void update_ui_languages(void);
+
+static int s_gps_heading = -1;
+static int s_gps_speed_cms = 0;
+
+static GPath *s_arrow_outer_path = NULL;
+static GPath *s_arrow_inner_path = NULL;
+
+static const GPathInfo ARROW_OUTER_PATH_INFO = {
+  .num_points = 4,
+  .points = (GPoint []) {
+    {0, -15},
+    {10, 12},
+    {0, 6},
+    {-10, 12}
+  }
+};
+
+static const GPathInfo ARROW_INNER_PATH_INFO = {
+  .num_points = 4,
+  .points = (GPoint []) {
+    {0, -12},
+    {8, 10},
+    {0, 5},
+    {-8, 10}
+  }
+};
+
+#define MAX_ROUTES 15
+static int s_route_count = 0;
+static uint32_t s_route_ids[MAX_ROUTES];
+static char s_route_names[MAX_ROUTES][32];
+static uint32_t s_active_route_id = 0;
+
+static Window *s_menu_window = NULL;
+static MenuLayer *s_menu_layer = NULL;
 
 static GBitmap *s_map_bitmap = NULL;
 static uint8_t *s_map_buffer = NULL;
@@ -44,7 +83,7 @@ static char s_instruction_text[64] = "Warte auf GPS...";
 static char s_avg_speed_text[16] = "0.0 km/h";
 static char s_elevation_gain_text[24] = "---m / ---m";
 static char s_elevation_loss_text[24] = "---m / ---m";
-static char s_trip_distance_text[16] = "--- km";
+static char s_trip_distance_text[16] = "--- / ---";
 static char s_coords_text[32] = "---, ---";
 
 // Haptic feedback levels
@@ -134,6 +173,12 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   }
   graphics_fill_rect(ctx, GRect(bounds.size.w - 87, 8, 6, 6), 3, GCornersAll);
   
+  // Draw Recording Status dot
+  if (s_recording_active) {
+    graphics_context_set_fill_color(ctx, GColorRed);
+    graphics_fill_rect(ctx, GRect(bounds.size.w - 102, 8, 6, 6), 3, GCornersAll);
+  }
+  
   // Draw Arrow
   if (s_nav_bearing != -1) {
     draw_arrow(ctx, GPoint(18, bounds.size.h / 2), s_nav_bearing);
@@ -160,12 +205,55 @@ static void footer_update_proc(Layer *layer, GContext *ctx) {
   }
 }
 
+static int get_current_bearing() {
+  // If speed is > 1.0 m/s (100 cm/s), use GPS heading/course
+  if (s_gps_speed_cms > 100 && s_gps_heading >= 0) {
+    return s_gps_heading;
+  }
+  
+  // Otherwise fall back to Pebble's built-in compass
+  CompassHeadingData compass;
+  compass_service_peek(&compass);
+  if (compass.compass_status != CompassStatusDataInvalid) {
+    int heading_deg;
+    if (compass.true_heading != TRIG_MAX_ANGLE) {
+      heading_deg = (compass.true_heading * 360) / TRIG_MAX_ANGLE;
+    } else {
+      heading_deg = (compass.magnetic_heading * 360) / TRIG_MAX_ANGLE;
+    }
+    return heading_deg;
+  }
+  
+  // Default fallbacks
+  if (s_gps_heading >= 0) {
+    return s_gps_heading;
+  }
+  return 0;
+}
+
 // Map Layer Update Callback (Renders the assembled GColor8 map bitmap)
 static void map_layer_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
   if (s_map_ready && s_map_bitmap) {
     graphics_draw_bitmap_in_rect(ctx, s_map_bitmap, bounds);
+    
+    // Draw the direction arrow at the center
+    if (s_gps_connected && s_arrow_outer_path && s_arrow_inner_path) {
+      int bearing = get_current_bearing();
+      int32_t angle = (TRIG_MAX_ANGLE * bearing) / 360;
+      GPoint center = GPoint(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+      
+      gpath_rotate_to(s_arrow_outer_path, angle);
+      gpath_move_to(s_arrow_outer_path, center);
+      graphics_context_set_fill_color(ctx, GColorWhite);
+      gpath_draw_filled(ctx, s_arrow_outer_path);
+      
+      gpath_rotate_to(s_arrow_inner_path, angle);
+      gpath_move_to(s_arrow_inner_path, center);
+      graphics_context_set_fill_color(ctx, GColorBlue);
+      gpath_draw_filled(ctx, s_arrow_inner_path);
+    }
   } else {
     // Render grey loading background
     graphics_context_set_fill_color(ctx, GColorLightGray);
@@ -173,8 +261,11 @@ static void map_layer_update_proc(Layer *layer, GContext *ctx) {
     
     // Loading Text
     graphics_context_set_text_color(ctx, GColorDarkGray);
+    const char *loading_text = s_gps_connected ? 
+      (s_is_english ? "Loading map..." : "Karte wird geladen...") : 
+      (s_is_english ? "No GPS signal" : "Kein GPS-Signal");
     graphics_draw_text(ctx, 
-                       s_gps_connected ? "Karte wird geladen..." : "Kein GPS-Signal", 
+                       loading_text, 
                        fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
                        GRect(10, bounds.size.h / 2 - 12, bounds.size.w - 20, 30),
                        GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
@@ -222,25 +313,74 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
   }
 }
 
+static void menu_window_load(Window *window);
+static void menu_window_unload(Window *window);
+
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Toggle between Map and Dashboard
-  s_show_dashboard = !s_show_dashboard;
-  
-  layer_set_hidden(s_map_layer, s_show_dashboard);
-  layer_set_hidden(s_footer_layer, s_show_dashboard);
-  layer_set_hidden(s_dashboard_layer, !s_show_dashboard);
-  
-  // In Dashboard mode, header is kept for GPS status & distance to turn
+  if (!s_show_dashboard) {
+    // Toggle to Dashboard
+    s_show_dashboard = true;
+    layer_set_hidden(s_map_layer, s_show_dashboard);
+    layer_set_hidden(s_footer_layer, s_show_dashboard);
+    layer_set_hidden(s_dashboard_layer, !s_show_dashboard);
+  } else {
+    // Open Route Selection Menu
+    if (!s_menu_window) {
+      s_menu_window = window_create();
+      window_set_window_handlers(s_menu_window, (WindowHandlers) {
+        .load = menu_window_load,
+        .unload = menu_window_unload
+      });
+    }
+    window_stack_push(s_menu_window, true);
+  }
+}
+
+static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
+  if (s_show_dashboard) {
+    // Return to map mode
+    s_show_dashboard = false;
+    layer_set_hidden(s_map_layer, s_show_dashboard);
+    layer_set_hidden(s_footer_layer, s_show_dashboard);
+    layer_set_hidden(s_dashboard_layer, !s_show_dashboard);
+  } else {
+    // Close the app by popping main window
+    window_stack_pop(true);
+  }
+}
+
+static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Send recording toggle command to companion
+  DictionaryIterator *iter;
+  app_message_outbox_begin(&iter);
+  if (iter) {
+    dict_write_uint8(iter, MESSAGE_KEY_RECORDING_STATE, 1);
+    app_message_outbox_send();
+  }
+  // Vibrate watch to confirm long press
+  vibes_short_pulse();
 }
 
 static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+  window_long_click_subscribe(BUTTON_ID_SELECT, 500, select_long_click_handler, NULL);
+  window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler);
 }
 
 // AppMessage Callback Handlers
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
+  Tuple *lang_tuple = dict_find(iter, MESSAGE_KEY_LANGUAGE);
+  if (lang_tuple) {
+    s_is_english = (lang_tuple->value->uint8 == 1);
+    persist_write_bool(PERSIST_KEY_LANGUAGE, s_is_english);
+    update_ui_languages();
+    if (s_map_layer) {
+      layer_mark_dirty(s_map_layer);
+    }
+  }
+
   // Handle text values
   Tuple *dist_tuple = dict_find(iter, MESSAGE_KEY_NAV_DISTANCE);
   if (dist_tuple && s_distance_layer) {
@@ -278,6 +418,57 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     s_off_route = (off_route_tuple->value->uint8 == 1);
     if (s_footer_layer) {
       layer_mark_dirty(s_footer_layer);
+    }
+  }
+
+  Tuple *rec_tuple = dict_find(iter, MESSAGE_KEY_RECORDING_STATE);
+  if (rec_tuple) {
+    s_recording_active = (rec_tuple->value->uint8 == 1);
+    if (s_header_layer) {
+      layer_mark_dirty(s_header_layer);
+    }
+  }
+
+  Tuple *gps_speed_tuple = dict_find(iter, MESSAGE_KEY_GPS_SPEED);
+  if (gps_speed_tuple) {
+    s_gps_speed_cms = gps_speed_tuple->value->int32;
+  }
+  
+  Tuple *gps_heading_tuple = dict_find(iter, MESSAGE_KEY_GPS_HEADING);
+  if (gps_heading_tuple) {
+    s_gps_heading = gps_heading_tuple->value->int32;
+  }
+
+  Tuple *active_route_tuple = dict_find(iter, MESSAGE_KEY_ACTIVE_ROUTE_ID);
+  if (active_route_tuple) {
+    s_active_route_id = active_route_tuple->value->uint32;
+    if (s_menu_layer) {
+      menu_layer_reload_data(s_menu_layer);
+    }
+  }
+
+  Tuple *route_count_tuple = dict_find(iter, MESSAGE_KEY_ROUTE_COUNT);
+  if (route_count_tuple) {
+    s_route_count = 0; // Reset count for syncing new list
+  }
+
+  Tuple *route_index_tuple = dict_find(iter, MESSAGE_KEY_ROUTE_INDEX);
+  Tuple *route_id_tuple = dict_find(iter, MESSAGE_KEY_ROUTE_ID);
+  Tuple *route_name_tuple = dict_find(iter, MESSAGE_KEY_ROUTE_NAME);
+  
+  if (route_index_tuple && route_id_tuple && route_name_tuple) {
+    uint16_t idx = route_index_tuple->value->uint16;
+    if (idx < MAX_ROUTES) {
+      s_route_ids[idx] = route_id_tuple->value->uint32;
+      snprintf(s_route_names[idx], sizeof(s_route_names[idx]), "%s", route_name_tuple->value->cstring);
+      
+      if (idx >= s_route_count) {
+        s_route_count = idx + 1;
+      }
+      
+      if (s_menu_layer) {
+        menu_layer_reload_data(s_menu_layer);
+      }
     }
   }
   
@@ -359,6 +550,31 @@ static void outbox_failed_handler(DictionaryIterator *iter, AppMessageResult rea
   APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox failed: %d", reason);
 }
 
+static void update_ui_languages() {
+  if (s_dash_avg_speed_title_layer) {
+    text_layer_set_text(s_dash_avg_speed_title_layer, s_is_english ? "AVG SPEED" : "Ø-GESCHWIND.");
+  }
+  if (s_dash_dist_title_layer) {
+    text_layer_set_text(s_dash_dist_title_layer, s_is_english ? "DISTANCE (W/R)" : "DISTANZ (G/R)");
+  }
+  if (s_dash_gain_title_layer) {
+    text_layer_set_text(s_dash_gain_title_layer, s_is_english ? "ELEV GAIN" : "HM AUFSTIEG");
+  }
+  if (s_dash_loss_title_layer) {
+    text_layer_set_text(s_dash_loss_title_layer, s_is_english ? "ELEV LOSS" : "HM ABSTIEG");
+  }
+  if (s_dash_coords_title_layer) {
+    text_layer_set_text(s_dash_coords_title_layer, s_is_english ? "GPS COORDS (SELECT: MENU)" : "GPS KOORDINATEN (SELECT: MENÜ)");
+  }
+  if (s_instruction_layer) {
+    const char *curr_text = text_layer_get_text(s_instruction_layer);
+    if (curr_text && (strcmp(curr_text, "Warte auf GPS...") == 0 || strcmp(curr_text, "Waiting for GPS...") == 0)) {
+      snprintf(s_instruction_text, sizeof(s_instruction_text), "%s", s_is_english ? "Waiting for GPS..." : "Warte auf GPS...");
+      text_layer_set_text(s_instruction_layer, s_instruction_text);
+    }
+  }
+}
+
 // Window Loading Procedures
 static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
@@ -368,6 +584,9 @@ static void main_window_load(Window *window) {
   s_map_bitmap = gbitmap_create_blank(GSize(MAP_WIDTH, MAP_HEIGHT), GBitmapFormat8Bit);
   s_map_buffer = gbitmap_get_data(s_map_bitmap);
   memset(s_map_buffer, 0b11101010, MAP_BUFFER_SIZE); // pre-populate with grey color (GColorLightGray)
+  
+  s_arrow_outer_path = gpath_create(&ARROW_OUTER_PATH_INFO);
+  s_arrow_inner_path = gpath_create(&ARROW_INNER_PATH_INFO);
   
   // 1. Header Layer (0 to 30px)
   s_header_layer = layer_create(GRect(0, 0, bounds.size.w, 30));
@@ -432,13 +651,13 @@ static void main_window_load(Window *window) {
   text_layer_set_text_color(s_dash_dist_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_dist_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
   text_layer_set_text_alignment(s_dash_dist_title_layer, GTextAlignmentCenter);
-  text_layer_set_text(s_dash_dist_title_layer, "REST-DISTANZ");
+  text_layer_set_text(s_dash_dist_title_layer, "DISTANZ (G/R)");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_title_layer));
   
   s_dash_dist_val_layer = text_layer_create(GRect(105, 20, 90, 36));
   text_layer_set_background_color(s_dash_dist_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_dist_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+  text_layer_set_font(s_dash_dist_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_dash_dist_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_dist_val_layer, s_trip_distance_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_val_layer));
@@ -492,10 +711,22 @@ static void main_window_load(Window *window) {
   text_layer_set_text_alignment(s_dash_coords_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_coords_val_layer, s_coords_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_coords_val_layer));
+  
+  update_ui_languages();
 }
 
 // Window Unloading Procedures
 static void main_window_unload(Window *window) {
+  // Free GPaths
+  if (s_arrow_outer_path) {
+    gpath_destroy(s_arrow_outer_path);
+    s_arrow_outer_path = NULL;
+  }
+  if (s_arrow_inner_path) {
+    gpath_destroy(s_arrow_inner_path);
+    s_arrow_inner_path = NULL;
+  }
+
   // Free buffers
   if (s_map_bitmap) {
     gbitmap_destroy(s_map_bitmap);
@@ -529,8 +760,116 @@ static void battery_state_handler(BatteryChargeState charge) {
   }
 }
 
+static void compass_heading_handler(CompassHeadingData heading) {
+  // Force redraw map layer on compass updates (if map is active/visible)
+  if (s_map_layer && !s_show_dashboard) {
+    layer_mark_dirty(s_map_layer);
+  }
+}
+
+// Route selection Menu callbacks
+static uint16_t menu_get_num_sections_callback(MenuLayer *menu_layer, void *data) {
+  return 1;
+}
+
+static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+  return s_route_count > 0 ? s_route_count : 1;
+}
+
+static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+  return 24;
+}
+
+static void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, uint16_t section_index, void *data) {
+  menu_cell_basic_header_draw(ctx, cell_layer, s_is_english ? "Select Route" : "Route auswählen");
+}
+
+static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
+  if (s_route_count == 0) {
+    menu_cell_basic_draw(ctx, cell_layer, 
+                         s_is_english ? "No routes synced" : "Keine Routen synchr.", 
+                         s_is_english ? "Add in settings" : "In Einstellungen laden", 
+                         NULL);
+    return;
+  }
+  
+  uint16_t row = cell_index->row;
+  if (row < MAX_ROUTES) {
+    bool is_active = (s_route_ids[row] == s_active_route_id && s_active_route_id != 0);
+    
+    static char title_buf[48];
+    if (is_active) {
+      snprintf(title_buf, sizeof(title_buf), "[X] %s", s_route_names[row]);
+    } else {
+      snprintf(title_buf, sizeof(title_buf), "    %s", s_route_names[row]);
+    }
+    
+    menu_cell_basic_draw(ctx, cell_layer, 
+                         title_buf, 
+                         is_active ? (s_is_english ? "Active (Select to stop)" : "Aktiv (Klick zum Stoppen)") : "", 
+                         NULL);
+  }
+}
+
+static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
+  if (s_route_count == 0) return;
+  
+  uint16_t row = cell_index->row;
+  if (row < MAX_ROUTES) {
+    bool is_active = (s_route_ids[row] == s_active_route_id && s_active_route_id != 0);
+    
+    uint32_t chosen_id = is_active ? 0 : s_route_ids[row];
+    s_active_route_id = chosen_id;
+    
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    if (iter) {
+      dict_write_uint32(iter, MESSAGE_KEY_ROUTE_ID, chosen_id);
+      app_message_outbox_send();
+    }
+    
+    vibes_short_pulse();
+    window_stack_pop(true);
+  }
+}
+
+static void menu_window_load(Window *window) {
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_frame(window_layer);
+  
+  s_menu_layer = menu_layer_create(bounds);
+  menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
+    .get_num_sections = menu_get_num_sections_callback,
+    .get_num_rows = menu_get_num_rows_callback,
+    .get_header_height = menu_get_header_height_callback,
+    .draw_header = menu_draw_header_callback,
+    .draw_row = menu_draw_row_callback,
+    .select_click = menu_select_callback,
+  });
+  
+  menu_layer_set_click_config_onto_window(s_menu_layer, window);
+  layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
+}
+
+static void menu_window_unload(Window *window) {
+  if (s_menu_layer) {
+    menu_layer_destroy(s_menu_layer);
+    s_menu_layer = NULL;
+  }
+  if (s_menu_window) {
+    window_destroy(s_menu_window);
+    s_menu_window = NULL;
+  }
+}
+
 // App Initialization
 static void init() {
+  if (persist_exists(PERSIST_KEY_LANGUAGE)) {
+    s_is_english = persist_read_bool(PERSIST_KEY_LANGUAGE);
+  } else {
+    s_is_english = false;
+  }
+
   s_main_window = window_create();
   window_set_window_handlers(s_main_window, (WindowHandlers) {
     .load = main_window_load,
@@ -551,11 +890,16 @@ static void init() {
   // Register battery state service
   battery_state_service_subscribe(battery_state_handler);
   
+  // Subscribe to compass service
+  compass_service_subscribe(compass_heading_handler);
+  compass_service_set_heading_filter(2 * (TRIG_MAX_ANGLE / 360));
+  
   window_stack_push(s_main_window, true);
 }
 
 // App Deinitialization
 static void deinit() {
+  compass_service_unsubscribe();
   battery_state_service_unsubscribe();
   window_destroy(s_main_window);
 }
