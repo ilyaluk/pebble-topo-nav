@@ -160,7 +160,7 @@ Pebble.addEventListener('ready', function() {
       savedRoutes = [];
     }
     if (savedRoutes && Array.isArray(savedRoutes)) {
-      var activeRoute = savedRoutes.filter(function(r) { return r.id === activeId; })[0];
+      var activeRoute = savedRoutes.filter(function(r) { return (r.id & 0xFFFFFFFF) === (activeId & 0xFFFFFFFF); })[0];
       if (activeRoute) {
         gpxTrack = activeRoute.points || [];
         console.log('Loaded active route: ' + activeRoute.name + ' (' + gpxTrack.length + ' points).');
@@ -300,35 +300,57 @@ function activateSavedRoute(routeId) {
   }
   var foundRoute = null;
   if (savedRoutes && Array.isArray(savedRoutes)) {
-    foundRoute = savedRoutes.filter(function(r) { return r.id === routeId; })[0];
+    foundRoute = savedRoutes.filter(function(r) { return (r.id & 0xFFFFFFFF) === (routeId & 0xFFFFFFFF); })[0];
   }
   
   if (foundRoute) {
+    if (isNavigating) {
+      stopRecording(true);
+    }
+
     localStorage.setItem('activeRouteId', routeId.toString());
     gpxTrack = foundRoute.points || [];
     localStorage.setItem('gpxTrack', JSON.stringify(gpxTrack));
     console.log('Activated route: ' + foundRoute.name);
+    
+    // Reset navigation stats for the new route
+    totalMovingDistance = 0;
+    totalMovingTimeSec = 0;
+    localStorage.removeItem('totalMovingDistance');
+    localStorage.removeItem('totalMovingTimeSec');
+    closestTrackPointIdx = -1;
+    localStorage.removeItem('closestTrackPointIdx');
+    lastPositionTime = null;
+    lastPositionCoords = null;
+    lastVibratedTurnIdx = -1;
+    hasVibratedOffRoute = false;
+    
+    if (gpxTrack.length > 0) {
+      cacheTrackTiles(gpxTrack);
+    }
+    
+    startRecording();
   } else if (routeId === 0) {
     localStorage.setItem('activeRouteId', '0');
     gpxTrack = [];
     localStorage.setItem('gpxTrack', JSON.stringify(gpxTrack));
     console.log('Deactivated current route.');
-  }
-
-  // Reset navigation stats for the new route
-  totalMovingDistance = 0;
-  totalMovingTimeSec = 0;
-  localStorage.removeItem('totalMovingDistance');
-  localStorage.removeItem('totalMovingTimeSec');
-  closestTrackPointIdx = -1;
-  localStorage.removeItem('closestTrackPointIdx');
-  lastPositionTime = null;
-  lastPositionCoords = null;
-  lastVibratedTurnIdx = -1;
-  hasVibratedOffRoute = false;
-  
-  if (gpxTrack.length > 0) {
-    cacheTrackTiles(gpxTrack);
+    
+    // Reset navigation stats
+    totalMovingDistance = 0;
+    totalMovingTimeSec = 0;
+    localStorage.removeItem('totalMovingDistance');
+    localStorage.removeItem('totalMovingTimeSec');
+    closestTrackPointIdx = -1;
+    localStorage.removeItem('closestTrackPointIdx');
+    lastPositionTime = null;
+    lastPositionCoords = null;
+    lastVibratedTurnIdx = -1;
+    hasVibratedOffRoute = false;
+    
+    if (isNavigating) {
+      stopRecording(true);
+    }
   }
   
   syncRoutesToWatch();
@@ -345,14 +367,14 @@ function deleteSavedRoute(routeId) {
   var updated = [];
   if (savedRoutes && Array.isArray(savedRoutes)) {
     updated = savedRoutes.filter(function(r) {
-      return r.id !== routeId;
+      return (r.id & 0xFFFFFFFF) !== (routeId & 0xFFFFFFFF);
     });
   }
   localStorage.setItem('savedRoutes', JSON.stringify(updated));
   console.log('Deleted route ID: ' + routeId);
   
   var activeId = parseInt(localStorage.getItem('activeRouteId') || '0', 10);
-  if (activeId === routeId) {
+  if ((activeId & 0xFFFFFFFF) === (routeId & 0xFFFFFFFF)) {
     activateSavedRoute(0);
   } else {
     syncRoutesToWatch();
@@ -420,55 +442,68 @@ function deleteSavedTrip(tripId) {
   localStorage.setItem('savedTrips', JSON.stringify(updated));
 }
 
-function toggleRecordingState() {
-  isNavigating = !isNavigating;
-  localStorage.setItem('isNavigating', isNavigating ? 'true' : 'false');
+function startRecording() {
+  isNavigating = true;
+  localStorage.setItem('isNavigating', 'true');
   
-  if (isNavigating) {
-    recordedTrack = [];
-    localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
-    
-    totalMovingDistance = 0;
-    totalMovingTimeSec = 0;
-    localStorage.setItem('totalMovingDistance', 0);
-    localStorage.setItem('totalMovingTimeSec', 0);
-    
-    closestTrackPointIdx = -1;
-    localStorage.setItem('closestTrackPointIdx', -1);
-    lastPositionTime = null;
-    lastPositionCoords = null;
-    
-    // Confirm start with short vibe
-    Pebble.sendAppMessage({
-      RECORDING_STATE: 1,
-      VIBRATE_ALERT: 1
-    });
-  } else {
-    if (recordedTrack.length > 0) {
-      var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-      var newTrip = {
-        id: Date.now(),
-        date: new Date().toISOString(),
-        distance: totalMovingDistance,
-        duration: totalMovingTimeSec,
-        points: recordedTrack
-      };
-      savedTrips.push(newTrip);
-      localStorage.setItem('savedTrips', JSON.stringify(savedTrips));
-      console.log('Saved new trip with ' + recordedTrack.length + ' points.');
-    }
-    
-    recordedTrack = [];
-    localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
-    
-    // Confirm stop with double vibe
-    Pebble.sendAppMessage({
-      RECORDING_STATE: 0,
-      VIBRATE_ALERT: 2
-    });
-  }
+  recordedTrack = [];
+  localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
+  
+  totalMovingDistance = 0;
+  totalMovingTimeSec = 0;
+  localStorage.setItem('totalMovingDistance', 0);
+  localStorage.setItem('totalMovingTimeSec', 0);
+  
+  closestTrackPointIdx = -1;
+  localStorage.setItem('closestTrackPointIdx', -1);
+  lastPositionTime = null;
+  lastPositionCoords = null;
+  
+  // Confirm start with short vibe
+  Pebble.sendAppMessage({
+    RECORDING_STATE: 1,
+    VIBRATE_ALERT: 1
+  });
   
   updateWatchNavigationAndMap();
+}
+
+function stopRecording(save) {
+  isNavigating = false;
+  localStorage.setItem('isNavigating', 'false');
+  
+  if (save && recordedTrack.length > 0) {
+    var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
+    var newTrip = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      distance: totalMovingDistance,
+      duration: totalMovingTimeSec,
+      points: recordedTrack
+    };
+    savedTrips.push(newTrip);
+    localStorage.setItem('savedTrips', JSON.stringify(savedTrips));
+    console.log('Saved new trip with ' + recordedTrack.length + ' points.');
+  }
+  
+  recordedTrack = [];
+  localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
+  
+  // Confirm stop with double vibe
+  Pebble.sendAppMessage({
+    RECORDING_STATE: 0,
+    VIBRATE_ALERT: 2
+  });
+  
+  updateWatchNavigationAndMap();
+}
+
+function toggleRecordingState() {
+  if (isNavigating) {
+    stopRecording(true);
+  } else {
+    startRecording();
+  }
 }
 
 // Settings config page trigger

@@ -93,6 +93,11 @@ static uint32_t s_active_route_id = 0;
 static Window *s_menu_window = NULL;
 static MenuLayer *s_menu_layer = NULL;
 
+static Window *s_confirm_window = NULL;
+static TextLayer *s_confirm_text_layer = NULL;
+static TextLayer *s_confirm_subtext_layer = NULL;
+static uint32_t s_pending_route_id = 0;
+
 static GBitmap *s_map_bitmap = NULL;
 static uint8_t *s_map_buffer = NULL;
 static bool s_map_ready = false;
@@ -863,6 +868,104 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
   }
 }
 
+static void confirm_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Confirm action: send s_pending_route_id to phone
+  DictionaryIterator *iter;
+  app_message_outbox_begin(&iter);
+  if (iter) {
+    dict_write_uint32(iter, MESSAGE_KEY_ROUTE_ID, s_pending_route_id);
+    app_message_outbox_send();
+  }
+  
+  // Also set s_active_route_id locally immediately for UI responsiveness
+  s_active_route_id = s_pending_route_id;
+  if (s_menu_layer) {
+    menu_layer_reload_data(s_menu_layer);
+  }
+  
+  // Vibration feedback: double pulse if stopping, short pulse if starting/switching
+  if (s_pending_route_id == 0) {
+    vibes_double_pulse();
+  } else {
+    vibes_short_pulse();
+  }
+  
+  // Remove the menu window from stack so popping confirmation returns to main map screen
+  if (s_menu_window) {
+    window_stack_remove(s_menu_window, false);
+  }
+  
+  // Pop confirmation window
+  window_stack_pop(true);
+}
+
+static void confirm_click_config_provider(void *context) {
+  window_single_click_subscribe(BUTTON_ID_SELECT, confirm_select_click_handler);
+}
+
+static void confirm_window_load(Window *window) {
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+  
+  s_confirm_text_layer = text_layer_create(GRect(5, 15, bounds.size.w - 10, 60));
+  text_layer_set_background_color(s_confirm_text_layer, GColorClear);
+  text_layer_set_text_color(s_confirm_text_layer, GColorBlack);
+  text_layer_set_font(s_confirm_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_confirm_text_layer, GTextAlignmentCenter);
+  
+  s_confirm_subtext_layer = text_layer_create(GRect(5, 75, bounds.size.w - 10, 70));
+  text_layer_set_background_color(s_confirm_subtext_layer, GColorClear);
+  text_layer_set_text_color(s_confirm_subtext_layer, GColorDarkGray);
+  text_layer_set_font(s_confirm_subtext_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_text_alignment(s_confirm_subtext_layer, GTextAlignmentCenter);
+  
+  if (s_pending_route_id == 0) {
+    // Stopping route
+    text_layer_set_text(s_confirm_text_layer, s_is_english ? "Stop navigation?" : "Navi stoppen?");
+    text_layer_set_text(s_confirm_subtext_layer, s_is_english ? "SELECT: Confirm\nBACK: Cancel" : "SELECT: Ja\nBACK: Nein");
+  } else {
+    if (s_active_route_id != 0) {
+      // Overwriting existing active route navigation
+      text_layer_set_text(s_confirm_text_layer, s_is_english ? "Switch route?" : "Route wechseln?");
+      text_layer_set_text(s_confirm_subtext_layer, s_is_english ? "Saves current trip.\nSELECT: Start\nBACK: Cancel" : "Speichert aktuelle.\nSELECT: Start\nBACK: Nein");
+    } else {
+      // Starting new route navigation
+      text_layer_set_text(s_confirm_text_layer, s_is_english ? "Start navigation?" : "Navi starten?");
+      text_layer_set_text(s_confirm_subtext_layer, s_is_english ? "SELECT: Start\nBACK: Cancel" : "SELECT: Start\nBACK: Nein");
+    }
+  }
+  
+  layer_add_child(window_layer, text_layer_get_layer(s_confirm_text_layer));
+  layer_add_child(window_layer, text_layer_get_layer(s_confirm_subtext_layer));
+}
+
+static void confirm_window_unload(Window *window) {
+  if (s_confirm_text_layer) {
+    text_layer_destroy(s_confirm_text_layer);
+    s_confirm_text_layer = NULL;
+  }
+  if (s_confirm_subtext_layer) {
+    text_layer_destroy(s_confirm_subtext_layer);
+    s_confirm_subtext_layer = NULL;
+  }
+  if (s_confirm_window) {
+    window_destroy(s_confirm_window);
+    s_confirm_window = NULL;
+  }
+}
+
+static void show_confirm_window() {
+  if (!s_confirm_window) {
+    s_confirm_window = window_create();
+    window_set_click_config_provider(s_confirm_window, confirm_click_config_provider);
+    window_set_window_handlers(s_confirm_window, (WindowHandlers) {
+      .load = confirm_window_load,
+      .unload = confirm_window_unload
+    });
+  }
+  window_stack_push(s_confirm_window, true);
+}
+
 static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
   if (s_route_count == 0) return;
   
@@ -870,18 +973,12 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
   if (row < MAX_ROUTES) {
     bool is_active = (s_route_ids[row] == s_active_route_id && s_active_route_id != 0);
     
-    uint32_t chosen_id = is_active ? 0 : s_route_ids[row];
-    s_active_route_id = chosen_id;
-    
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-    if (iter) {
-      dict_write_uint32(iter, MESSAGE_KEY_ROUTE_ID, chosen_id);
-      app_message_outbox_send();
+    if (is_active) {
+      s_pending_route_id = 0;
+    } else {
+      s_pending_route_id = s_route_ids[row];
     }
-    
-    vibes_short_pulse();
-    window_stack_pop(true);
+    show_confirm_window();
   }
 }
 
