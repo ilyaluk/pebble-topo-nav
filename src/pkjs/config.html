@@ -278,6 +278,14 @@
       <option value="de" selected>Deutsch</option>
       <option value="en">English</option>
     </select>
+    
+    <label for="map-source" id="label-map-source" style="margin-top: 15px;">Kartenquelle / Map Source</label>
+    <select id="map-source">
+      <option value="opentopomap" selected>OpenTopoMap (Topografisch, Standard)</option>
+      <option value="hikebikemap">HikeBikeMap (Kontrastreich, Outdoor)</option>
+      <option value="mtbmap">MtbMap (Wander- & Radwege)</option>
+      <option value="osm">OpenStreetMap Standard (Schnell / Klares Design)</option>
+    </select>
   </div>
 
   <!-- GPX Import -->
@@ -374,7 +382,12 @@
       cardSavedRoutes: "Gespeicherte Routen",
       noRoutes: "Keine Routen gespeichert.",
       btnActivate: "Aktivieren",
-      activeLabel: "Aktiv"
+      activeLabel: "Aktiv",
+      mapSourceLabel: "Kartenquelle",
+      mapOpenTopoMap: "OpenTopoMap (Topografisch, Standard)",
+      mapHikeBikeMap: "HikeBikeMap (Kontrastreich, Outdoor)",
+      mapMtbMap: "MtbMap (Wander- & Radwege)",
+      mapOsm: "OpenStreetMap Standard (Schnell / Klares Design)"
     },
     en: {
       title: "TopoNav Settings",
@@ -416,7 +429,12 @@
       cardSavedRoutes: "Saved Routes",
       noRoutes: "No saved routes.",
       btnActivate: "Activate",
-      activeLabel: "Active"
+      activeLabel: "Active",
+      mapSourceLabel: "Map Source",
+      mapOpenTopoMap: "OpenTopoMap (Topographic, Default)",
+      mapHikeBikeMap: "HikeBikeMap (High-contrast Outdoor)",
+      mapMtbMap: "MtbMap (High-contrast Trails)",
+      mapOsm: "OpenStreetMap Standard (Fast / Clean)"
     }
   };
 
@@ -436,6 +454,14 @@
     intervalSelect.options[2].text = t.gps30;
     
     document.getElementById("label-app-lang").innerText = t.langLabel;
+    
+    document.getElementById("label-map-source").innerText = t.mapSourceLabel;
+    var mapSourceSelect = document.getElementById("map-source");
+    mapSourceSelect.options[0].text = t.mapOpenTopoMap;
+    mapSourceSelect.options[1].text = t.mapHikeBikeMap;
+    mapSourceSelect.options[2].text = t.mapMtbMap;
+    mapSourceSelect.options[3].text = t.mapOsm;
+    
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-a").innerText = t.methodA;
     
@@ -746,14 +772,15 @@
     });
   }
 
-  // Submit and Close WebView
   saveBtn.addEventListener("click", function() {
     var gpsInterval = parseInt(document.getElementById("gps-interval").value);
     var appLang = document.getElementById("app-lang").value;
+    var mapSource = document.getElementById("map-source").value;
     
     var settings = {
       gpsInterval: gpsInterval,
-      language: appLang
+      language: appLang,
+      mapSource: mapSource
     };
     
     if (gpxCleared) {
@@ -793,6 +820,11 @@
   var initialLang = getQueryParam("lang");
   if (initialLang) {
     document.getElementById("app-lang").value = initialLang;
+  }
+  
+  var initialMap = getQueryParam("map");
+  if (initialMap) {
+    document.getElementById("map-source").value = initialMap;
   }
   
   // Listen for language dropdown change
