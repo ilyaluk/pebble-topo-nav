@@ -1,5 +1,7 @@
 var png = require('./png');
 var graphics = require('./graphics');
+var MAP_WIDTH = 200;
+var MAP_HEIGHT = 150;
 
 // State Variables
 var CHUNK_SIZE = 3000;
@@ -99,8 +101,9 @@ function getTileUrl(z, x, y) {
 
 // Initialize the Pebble application
 Pebble.addEventListener('ready', function() {
-  console.log('TopoNav PebbleKit JS is ready!');
-  initMapDimensions();
+  graphics.initMapDimensions();
+  MAP_WIDTH = graphics.getMapWidth();
+  MAP_HEIGHT = graphics.getMapHeight();
   
   // Load settings from LocalStorage
   var storedInterval = localStorage.getItem('gpsInterval');

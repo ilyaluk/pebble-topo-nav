@@ -228,5 +228,8 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, close
 module.exports = {
   latLonToPixels: latLonToPixels,
   pixelsToLatLon: pixelsToLatLon,
-  renderViewport: renderViewport
+  renderViewport: renderViewport,
+  initMapDimensions: initMapDimensions,
+  getMapWidth: function() { return MAP_WIDTH; },
+  getMapHeight: function() { return MAP_HEIGHT; }
 };
