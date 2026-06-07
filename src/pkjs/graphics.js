@@ -1,14 +1,16 @@
 var MAP_WIDTH = 200;
 var MAP_HEIGHT = 150;
 
-function initMapDimensions() {
-  var platform = "basalt";
-  if (typeof Pebble !== 'undefined' && Pebble.getActiveWatchInfo) {
-    try {
-      var info = Pebble.getActiveWatchInfo();
-      platform = info.platform || "basalt";
-    } catch(e) {
-      console.log("Error getting watch info: " + e);
+function initMapDimensions(platform) {
+  if (!platform) {
+    platform = "basalt";
+    if (typeof Pebble !== 'undefined' && Pebble.getActiveWatchInfo) {
+      try {
+        var info = Pebble.getActiveWatchInfo();
+        platform = info.platform || "basalt";
+      } catch(e) {
+        console.log("Error getting watch info: " + e);
+      }
     }
   }
   

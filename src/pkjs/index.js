@@ -101,7 +101,16 @@ function getTileUrl(z, x, y) {
 
 // Initialize the Pebble application
 Pebble.addEventListener('ready', function() {
-  graphics.initMapDimensions();
+  var platform = "basalt";
+  if (typeof Pebble !== 'undefined' && Pebble.getActiveWatchInfo) {
+    try {
+      var info = Pebble.getActiveWatchInfo();
+      platform = info.platform || "basalt";
+    } catch(e) {
+      console.log("Error getting watch info: " + e);
+    }
+  }
+  graphics.initMapDimensions(platform);
   MAP_WIDTH = graphics.getMapWidth();
   MAP_HEIGHT = graphics.getMapHeight();
   
@@ -144,20 +153,29 @@ Pebble.addEventListener('ready', function() {
   var activeRouteIdStr = localStorage.getItem('activeRouteId');
   if (activeRouteIdStr) {
     var activeId = parseInt(activeRouteIdStr, 10);
-    var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-    var activeRoute = savedRoutes.filter(function(r) { return r.id === activeId; })[0];
-    if (activeRoute) {
-      gpxTrack = activeRoute.points || [];
-      console.log('Loaded active route: ' + activeRoute.name + ' (' + gpxTrack.length + ' points).');
+    var savedRoutes = [];
+    try {
+      savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+    } catch (e) {
+      savedRoutes = [];
+    }
+    if (savedRoutes && Array.isArray(savedRoutes)) {
+      var activeRoute = savedRoutes.filter(function(r) { return r.id === activeId; })[0];
+      if (activeRoute) {
+        gpxTrack = activeRoute.points || [];
+        console.log('Loaded active route: ' + activeRoute.name + ' (' + gpxTrack.length + ' points).');
+      } else {
+        gpxTrack = [];
+      }
     } else {
       gpxTrack = [];
     }
   } else {
     // Legacy fallback
-    var storedTrack = localStorage.getItem('gpxTrack');
-    if (storedTrack) {
+    var storedTrackFallback = localStorage.getItem('gpxTrack');
+    if (storedTrackFallback) {
       try {
-        gpxTrack = JSON.parse(storedTrack);
+        gpxTrack = JSON.parse(storedTrackFallback);
         console.log('Loaded legacy GPX track: ' + gpxTrack.length + ' points.');
       } catch (e) {
         gpxTrack = [];
@@ -227,8 +245,17 @@ function openConfigPage(downloadGpxData, downloadName) {
 
 // Sync routes list to watch
 function syncRoutesToWatch() {
-  var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+  var savedRoutes = [];
+  try {
+    savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+  } catch (e) {
+    savedRoutes = [];
+  }
   var activeRouteId = parseInt(localStorage.getItem('activeRouteId') || '0', 10);
+  
+  if (!savedRoutes || !Array.isArray(savedRoutes)) {
+    savedRoutes = [];
+  }
   
   console.log('Syncing ' + savedRoutes.length + ' routes to watch. Active ID: ' + activeRouteId);
   
@@ -265,8 +292,16 @@ function syncRoutesToWatch() {
 }
 
 function activateSavedRoute(routeId) {
-  var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-  var foundRoute = savedRoutes.filter(function(r) { return r.id === routeId; })[0];
+  var savedRoutes = [];
+  try {
+    savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+  } catch (e) {
+    savedRoutes = [];
+  }
+  var foundRoute = null;
+  if (savedRoutes && Array.isArray(savedRoutes)) {
+    foundRoute = savedRoutes.filter(function(r) { return r.id === routeId; })[0];
+  }
   
   if (foundRoute) {
     localStorage.setItem('activeRouteId', routeId.toString());
@@ -301,10 +336,18 @@ function activateSavedRoute(routeId) {
 }
 
 function deleteSavedRoute(routeId) {
-  var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-  var updated = savedRoutes.filter(function(r) {
-    return r.id !== routeId;
-  });
+  var savedRoutes = [];
+  try {
+    savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+  } catch (e) {
+    savedRoutes = [];
+  }
+  var updated = [];
+  if (savedRoutes && Array.isArray(savedRoutes)) {
+    updated = savedRoutes.filter(function(r) {
+      return r.id !== routeId;
+    });
+  }
   localStorage.setItem('savedRoutes', JSON.stringify(updated));
   console.log('Deleted route ID: ' + routeId);
   
@@ -568,23 +611,37 @@ Pebble.addEventListener('appmessage', function(e) {
 
 // Restart GPS tracking with current interval
 function restartGPSTracking() {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    console.error('Navigator or Geolocation is not available.');
+    onGPSError({ message: 'Geolocation not supported' });
+    return;
+  }
+
   if (gpsWatchId !== null) {
-    navigator.geolocation.clearWatch(gpsWatchId);
+    try {
+      navigator.geolocation.clearWatch(gpsWatchId);
+    } catch (e) {
+      console.warn('Error clearing watch: ' + e);
+    }
   }
   
   var options = {
     enableHighAccuracy: true,
-    maximumAge: 1000,
-    timeout: 5000
+    maximumAge: 10000, // allow cached location up to 10s old
+    timeout: 10000     // larger timeout to avoid immediate cold start failures
   };
   
-  gpsWatchId = navigator.geolocation.watchPosition(
-    onGPSSuccess,
-    onGPSError,
-    options
-  );
-  
-  console.log('GPS tracking started with interval: ' + gpsInterval + 's');
+  try {
+    gpsWatchId = navigator.geolocation.watchPosition(
+      onGPSSuccess,
+      onGPSError,
+      options
+    );
+    console.log('GPS tracking started with interval: ' + gpsInterval + 's');
+  } catch (err) {
+    console.error('Error starting watchPosition: ' + err);
+    onGPSError({ message: err.message || 'Permission/Initialization error' });
+  }
 }
 
 function onGPSSuccess(position) {
