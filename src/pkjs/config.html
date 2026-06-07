@@ -444,6 +444,11 @@
 
   function applyLanguage(lang) {
     var t = translations[lang] || translations.de;
+    
+    // Save current values to prevent resets in some WebView engines when updating options
+    var gpsIntervalVal = document.getElementById("gps-interval").value;
+    var mapSourceVal = document.getElementById("map-source").value;
+    
     document.getElementById("page-title").innerText = t.title;
     document.getElementById("card-general").innerText = t.general;
     document.getElementById("label-gps-interval").innerText = t.gpsInterval;
@@ -461,6 +466,10 @@
     mapSourceSelect.options[1].text = t.mapHikeBikeMap;
     mapSourceSelect.options[2].text = t.mapMtbMap;
     mapSourceSelect.options[3].text = t.mapOsm;
+    
+    // Restore saved values
+    document.getElementById("gps-interval").value = gpsIntervalVal;
+    document.getElementById("map-source").value = mapSourceVal;
     
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-a").innerText = t.methodA;
