@@ -2,7 +2,7 @@
 
 All notable changes to the TopoNav project will be documented in this file.
 
-## [1.10.0] - 2026-06-08
+## [2.0.0] - 2026-06-08
 
 ### Added
 - **Fullscreen Map Mode**: Added a new settings configuration toggle to enable fullscreen map view. Hides header and footer overlays on the watch to maximize visible map area, dynamically adjusting layers and centering the compass chevron on the expanded viewport.
