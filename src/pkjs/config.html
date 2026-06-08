@@ -240,6 +240,12 @@
       <option value="mtbmap">MtbMap (Wander- & Radwege)</option>
       <option value="osm">OpenStreetMap Standard (Schnell / Klares Design)</option>
     </select>
+
+    <label for="fullscreen-map" id="label-fullscreen-map" style="margin-top: 15px;">Vollbild-Modus (Karte) / Fullscreen Mode (Map)</label>
+    <select id="fullscreen-map">
+      <option value="false" selected>Aus (Standardlayout)</option>
+      <option value="true">An (Keine Header/Footer)</option>
+    </select>
   </div>
 
   <!-- GPX Import -->
@@ -324,7 +330,10 @@
       mapOpenTopoMap: "OpenTopoMap (Topografisch, Standard)",
       mapHikeBikeMap: "HikeBikeMap (Kontrastreich, Outdoor)",
       mapMtbMap: "MtbMap (Wander- & Radwege)",
-      mapOsm: "OpenStreetMap Standard (Schnell / Klares Design)"
+      mapOsm: "OpenStreetMap Standard (Schnell / Klares Design)",
+      fullscreenLabel: "Vollbild-Modus (Karte)",
+      fullscreenOn: "An (Keine Header/Footer)",
+      fullscreenOff: "Aus (Standardlayout)"
     },
     en: {
       title: "TopoNav Settings",
@@ -364,7 +373,10 @@
       mapOpenTopoMap: "OpenTopoMap (Topographic, Default)",
       mapHikeBikeMap: "HikeBikeMap (High-contrast Outdoor)",
       mapMtbMap: "MtbMap (High-contrast Trails)",
-      mapOsm: "OpenStreetMap Standard (Fast / Clean)"
+      mapOsm: "OpenStreetMap Standard (Fast / Clean)",
+      fullscreenLabel: "Fullscreen Mode (Map)",
+      fullscreenOn: "On (No Header/Footer)",
+      fullscreenOff: "Off (Standard Layout)"
     }
   };
 
@@ -378,6 +390,7 @@
     // Save current values to prevent resets in some WebView engines when updating options
     var gpsIntervalVal = document.getElementById("gps-interval").value;
     var mapSourceVal = document.getElementById("map-source").value;
+    var fullscreenVal = document.getElementById("fullscreen-map").value;
     
     document.getElementById("page-title").innerText = t.title;
     document.getElementById("card-general").innerText = t.general;
@@ -396,10 +409,16 @@
     mapSourceSelect.options[1].text = t.mapHikeBikeMap;
     mapSourceSelect.options[2].text = t.mapMtbMap;
     mapSourceSelect.options[3].text = t.mapOsm;
+
+    document.getElementById("label-fullscreen-map").innerText = t.fullscreenLabel;
+    var fullscreenSelect = document.getElementById("fullscreen-map");
+    fullscreenSelect.options[0].text = t.fullscreenOff;
+    fullscreenSelect.options[1].text = t.fullscreenOn;
     
     // Restore saved values
     document.getElementById("gps-interval").value = gpsIntervalVal;
     document.getElementById("map-source").value = mapSourceVal;
+    document.getElementById("fullscreen-map").value = fullscreenVal;
     
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-b").innerText = t.methodB;
@@ -660,11 +679,13 @@
     var gpsInterval = parseInt(document.getElementById("gps-interval").value);
     var appLang = document.getElementById("app-lang").value;
     var mapSource = document.getElementById("map-source").value;
+    var fullscreen = document.getElementById("fullscreen-map").value === "true";
     
     var settings = {
       gpsInterval: gpsInterval,
       language: appLang,
-      mapSource: mapSource
+      mapSource: mapSource,
+      fullscreen: fullscreen
     };
     
     if (gpxCleared) {
@@ -709,6 +730,11 @@
   var initialMap = getQueryParam("map");
   if (initialMap) {
     document.getElementById("map-source").value = initialMap;
+  }
+  
+  var initialFullscreen = getQueryParam("fullscreen");
+  if (initialFullscreen) {
+    document.getElementById("fullscreen-map").value = initialFullscreen;
   }
   
   // Listen for language dropdown change

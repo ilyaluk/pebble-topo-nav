@@ -11,6 +11,23 @@ var currentLocation = null;
 var currentZoom = 17;
 var isSendingMap = false;
 var gpsWatchId = null;
+var platform = "basalt";
+
+function updateMapDimensions() {
+  var isFullscreen = localStorage.getItem('fullscreen') === 'true';
+  if (platform === "emery") {
+    MAP_WIDTH = 200;
+    MAP_HEIGHT = isFullscreen ? 228 : 150;
+  } else if (platform === "chalk") {
+    MAP_WIDTH = 180;
+    MAP_HEIGHT = isFullscreen ? 180 : 114;
+  } else { // basalt, aplite
+    MAP_WIDTH = 144;
+    MAP_HEIGHT = isFullscreen ? 168 : 112;
+  }
+  graphics.setDimensions(MAP_WIDTH, MAP_HEIGHT);
+  console.log("Updated map dimensions to: " + MAP_WIDTH + "x" + MAP_HEIGHT + " (Fullscreen: " + isFullscreen + ")");
+}
 
 // Navigation & Recording State
 var isNavigating = false;
@@ -101,7 +118,6 @@ function getTileUrl(z, x, y) {
 
 // Initialize the Pebble application
 Pebble.addEventListener('ready', function() {
-  var platform = "basalt";
   if (typeof Pebble !== 'undefined' && Pebble.getActiveWatchInfo) {
     try {
       var info = Pebble.getActiveWatchInfo();
@@ -111,11 +127,13 @@ Pebble.addEventListener('ready', function() {
     }
   }
   graphics.initMapDimensions(platform);
-  MAP_WIDTH = graphics.getMapWidth();
-  MAP_HEIGHT = graphics.getMapHeight();
   
   // Load settings from LocalStorage
   var storedInterval = localStorage.getItem('gpsInterval');
+  if (storedInterval) gpsInterval = parseInt(storedInterval);
+  
+  // Update map dimensions based on loaded settings
+  updateMapDimensions();
   if (storedInterval) gpsInterval = parseInt(storedInterval);
   
   var storedTrack = localStorage.getItem('gpxTrack');
@@ -195,6 +213,7 @@ function openConfigPage(downloadGpxData, downloadName) {
   var interval = localStorage.getItem('gpsInterval') || '5';
   var lang = localStorage.getItem('language') || 'de';
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
+  var fullscreen = localStorage.getItem('fullscreen') || 'false';
   var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
   
   // Serialize only metadata to stay within query param limits
@@ -229,6 +248,7 @@ function openConfigPage(downloadGpxData, downloadName) {
             '&interval=' + interval + 
             '&lang=' + lang + 
             '&map=' + mapSource + 
+            '&fullscreen=' + fullscreen + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
             '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
             '&routes=' + encodeURIComponent(JSON.stringify(routesMeta)) +
@@ -564,6 +584,15 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var oldMapSource = localStorage.getItem('mapSource') || 'opentopomap';
       localStorage.setItem('mapSource', mapSource);
       
+      var fullscreen = settings.fullscreen || false;
+      var oldFullscreen = localStorage.getItem('fullscreen') === 'true';
+      localStorage.setItem('fullscreen', fullscreen ? 'true' : 'false');
+      
+      if (fullscreen !== oldFullscreen) {
+        console.log('Fullscreen setting changed from ' + oldFullscreen + ' to ' + fullscreen);
+        updateMapDimensions();
+      }
+      
       if (mapSource !== oldMapSource) {
         console.log('Map source changed from ' + oldMapSource + ' to ' + mapSource + '. Triggering map reload.');
         // Force reload by clearing memory cache first (optional, but good practice since memory cache keys are style-agnostic)
@@ -757,12 +786,14 @@ function onGPSError(err) {
   console.log('GPS Error: ' + err.message);
   
   var isEnglish = localStorage.getItem('language') === 'en';
+  var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   // Notify watch of lost connection
   Pebble.sendAppMessage({
     GPS_CONNECTED: 0,
     NAV_INSTRUCTION: isEnglish ? 'No GPS Signal' : 'Kein GPS-Signal',
     NAV_DISTANCE: '---',
-    LANGUAGE: isEnglish ? 1 : 0
+    LANGUAGE: isEnglish ? 1 : 0,
+    FULLSCREEN_MODE: fullscreenMode
   });
 }
 
@@ -770,13 +801,15 @@ function onGPSError(err) {
 function updateWatchNavigationAndMap() {
   var isEnglish = localStorage.getItem('language') === 'en';
   var activeRouteId = parseInt(localStorage.getItem('activeRouteId') || '0', 10);
+  var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   
   if (!currentLocation) {
     Pebble.sendAppMessage({
       GPS_CONNECTED: 0,
       LANGUAGE: isEnglish ? 1 : 0,
       RECORDING_STATE: isNavigating ? 1 : 0,
-      ACTIVE_ROUTE_ID: activeRouteId
+      ACTIVE_ROUTE_ID: activeRouteId,
+      FULLSCREEN_MODE: fullscreenMode
     });
     return;
   }
@@ -790,7 +823,8 @@ function updateWatchNavigationAndMap() {
     RECORDING_STATE: isNavigating ? 1 : 0,
     GPS_SPEED: Math.round(currentSpeed * 100),
     GPS_HEADING: Math.round(currentHeading),
-    ACTIVE_ROUTE_ID: activeRouteId
+    ACTIVE_ROUTE_ID: activeRouteId,
+    FULLSCREEN_MODE: fullscreenMode
   };
 
   var offRoute = false;

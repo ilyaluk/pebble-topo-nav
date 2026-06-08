@@ -233,5 +233,9 @@ module.exports = {
   renderViewport: renderViewport,
   initMapDimensions: initMapDimensions,
   getMapWidth: function() { return MAP_WIDTH; },
-  getMapHeight: function() { return MAP_HEIGHT; }
+  getMapHeight: function() { return MAP_HEIGHT; },
+  setDimensions: function(w, h) {
+    MAP_WIDTH = w;
+    MAP_HEIGHT = h;
+  }
 };

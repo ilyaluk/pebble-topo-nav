@@ -58,6 +58,18 @@ static int s_nav_bearing = -1; // -1 = no instruction, 0 = straight, 90 = right,
 static bool s_is_english = false;
 static void update_ui_languages(void);
 
+// Fullscreen setting and dynamic map dimensions
+static uint16_t s_current_map_width = MAP_WIDTH;
+static uint16_t s_current_map_height = MAP_HEIGHT;
+static uint32_t s_current_map_buffer_size = MAP_WIDTH * MAP_HEIGHT;
+static bool s_fullscreen_mode = false;
+
+static GBitmap *s_map_bitmap = NULL;
+static uint8_t *s_map_buffer = NULL;
+static bool s_map_ready = false;
+
+#define PERSIST_KEY_FULLSCREEN_MODE 101
+
 static int s_gps_heading = -1;
 static int s_gps_speed_cms = 0;
 
@@ -88,6 +100,46 @@ static const GPathInfo ARROW_INNER_PATH_INFO = {
 static int s_route_count = 0;
 static uint32_t s_route_ids[MAX_ROUTES];
 static char s_route_names[MAX_ROUTES][32];
+
+static void set_map_dimensions(int width, int height) {
+  s_current_map_width = width;
+  s_current_map_height = height;
+  s_current_map_buffer_size = width * height;
+  
+  if (s_map_bitmap) {
+    gbitmap_destroy(s_map_bitmap);
+  }
+  s_map_bitmap = gbitmap_create_blank(GSize(width, height), GBitmapFormat8Bit);
+  s_map_buffer = gbitmap_get_data(s_map_bitmap);
+  if (s_map_buffer) {
+    memset(s_map_buffer, 0b11101010, s_current_map_buffer_size); // pre-populate with grey color
+  }
+  s_map_ready = false;
+}
+
+static void update_layout() {
+  if (!s_main_window) return;
+  Layer *window_layer = window_get_root_layer(s_main_window);
+  GRect bounds = layer_get_bounds(window_layer);
+  
+  if (s_fullscreen_mode) {
+    if (s_header_layer) layer_set_hidden(s_header_layer, true);
+    if (s_footer_layer) layer_set_hidden(s_footer_layer, true);
+    
+    if (s_map_layer) {
+      layer_set_frame(s_map_layer, GRect(0, 0, bounds.size.w, bounds.size.h));
+    }
+    set_map_dimensions(bounds.size.w, bounds.size.h);
+  } else {
+    if (s_header_layer) layer_set_hidden(s_header_layer, false);
+    if (s_footer_layer) layer_set_hidden(s_footer_layer, false);
+    
+    if (s_map_layer) {
+      layer_set_frame(s_map_layer, GRect(0, HEADER_HEIGHT, bounds.size.w, MAP_HEIGHT));
+    }
+    set_map_dimensions(MAP_WIDTH, MAP_HEIGHT);
+  }
+}
 static uint32_t s_active_route_id = 0;
 
 static Window *s_menu_window = NULL;
@@ -98,9 +150,6 @@ static TextLayer *s_confirm_text_layer = NULL;
 static TextLayer *s_confirm_subtext_layer = NULL;
 static uint32_t s_pending_route_id = 0;
 
-static GBitmap *s_map_bitmap = NULL;
-static uint8_t *s_map_buffer = NULL;
-static bool s_map_ready = false;
 static uint32_t s_received_chunks_mask = 0;
 static uint32_t s_expected_chunks = 0;
 
@@ -293,7 +342,7 @@ static void map_layer_update_proc(Layer *layer, GContext *ctx) {
     if (s_gps_connected && s_arrow_outer_path && s_arrow_inner_path) {
       int bearing = get_current_bearing();
       int32_t angle = (TRIG_MAX_ANGLE * bearing) / 360;
-      GPoint center = GPoint(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+      GPoint center = GPoint(s_current_map_width / 2, s_current_map_height / 2);
       
       gpath_rotate_to(s_arrow_outer_path, angle);
       gpath_move_to(s_arrow_outer_path, center);
@@ -374,6 +423,9 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     layer_set_hidden(s_map_layer, s_show_dashboard);
     layer_set_hidden(s_footer_layer, s_show_dashboard);
     layer_set_hidden(s_dashboard_layer, !s_show_dashboard);
+    if (s_fullscreen_mode) {
+      layer_set_hidden(s_header_layer, false); // Show header on dashboard even if fullscreen map is enabled
+    }
   } else {
     // Open Route Selection Menu
     if (!s_menu_window) {
@@ -394,6 +446,9 @@ static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
     layer_set_hidden(s_map_layer, s_show_dashboard);
     layer_set_hidden(s_footer_layer, s_show_dashboard);
     layer_set_hidden(s_dashboard_layer, !s_show_dashboard);
+    if (s_fullscreen_mode) {
+      layer_set_hidden(s_header_layer, true); // Re-hide header on map in fullscreen mode
+    }
   } else {
     // Close the app by popping main window
     window_stack_pop(true);
@@ -497,6 +552,16 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
       menu_layer_reload_data(s_menu_layer);
     }
   }
+  
+  Tuple *fullscreen_tuple = dict_find(iter, MESSAGE_KEY_FULLSCREEN_MODE);
+  if (fullscreen_tuple) {
+    bool new_fullscreen = (fullscreen_tuple->value->uint8 == 1);
+    if (new_fullscreen != s_fullscreen_mode) {
+      s_fullscreen_mode = new_fullscreen;
+      persist_write_bool(PERSIST_KEY_FULLSCREEN_MODE, s_fullscreen_mode);
+      update_layout();
+    }
+  }
 
   Tuple *route_count_tuple = dict_find(iter, MESSAGE_KEY_ROUTE_COUNT);
   if (route_count_tuple) {
@@ -578,7 +643,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     }
     
     // Copy incoming bytes to GBitmap buffer
-    if (s_map_buffer && (chunk_idx * CHUNK_SIZE + chunk_len <= MAP_BUFFER_SIZE)) {
+    if (s_map_buffer && (chunk_idx * CHUNK_SIZE + chunk_len <= s_current_map_buffer_size)) {
       memcpy(s_map_buffer + (chunk_idx * CHUNK_SIZE), chunk_data, chunk_len);
       s_received_chunks_mask |= (1 << chunk_idx);
       s_expected_chunks = total_chunks;
@@ -631,10 +696,8 @@ static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer); // 200x228 for Emery
   
-  // Allocate map GBitmap & pixel buffer
-  s_map_bitmap = gbitmap_create_blank(GSize(MAP_WIDTH, MAP_HEIGHT), GBitmapFormat8Bit);
-  s_map_buffer = gbitmap_get_data(s_map_bitmap);
-  memset(s_map_buffer, 0b11101010, MAP_BUFFER_SIZE); // pre-populate with grey color (GColorLightGray)
+  // Load fullscreen mode state
+  s_fullscreen_mode = persist_exists(PERSIST_KEY_FULLSCREEN_MODE) ? persist_read_bool(PERSIST_KEY_FULLSCREEN_MODE) : false;
   
   s_arrow_outer_path = gpath_create(&ARROW_OUTER_PATH_INFO);
   s_arrow_inner_path = gpath_create(&ARROW_INNER_PATH_INFO);
@@ -770,6 +833,7 @@ static void main_window_load(Window *window) {
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_coords_val_layer));
   
   update_ui_languages();
+  update_layout();
 }
 
 // Window Unloading Procedures

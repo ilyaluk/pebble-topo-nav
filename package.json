@@ -1,7 +1,7 @@
 {
   "name": "pebble-topo-nav",
   "author": "Antigravity",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "keywords": [
     "pebble-app"
   ],
@@ -46,7 +46,8 @@
       "ROUTE_INDEX",
       "ROUTE_ID",
       "ROUTE_NAME",
-      "ACTIVE_ROUTE_ID"
+      "ACTIVE_ROUTE_ID",
+      "FULLSCREEN_MODE"
     ],
     "resources": {
       "media": []
