@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.0] - 2026-06-14
+
+### Added
+- **Copy GPX to Clipboard Workaround**: Added a "Copy" / "Kopieren" button to the recorded trips list in settings. Since embedded mobile WebViews (especially on iOS) often restrict downloading files or opening local data/Blob URIs, users can now copy the raw GPX XML string directly to their clipboard and paste it into a file as a workaround.
+
+### Changed
+- **Capped Zoom Level**: Capped the maximum zoom level to 17 (previously 18) across the watchapp C code and the Leaflet settings map view of recorded routes, to prevent map rendering issues at extreme zoom levels.
+
 ## [2.4.0] - 2026-06-14
 
 ### Changed
