@@ -200,6 +200,19 @@
       font-size: 14px;
       font-weight: 500;
     }
+    @media (max-width: 480px) {
+      .trip-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 15px 0;
+      }
+      .trip-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+    }
   </style>
 </head>
 <body>
@@ -909,6 +922,23 @@
         showTripModal(pts, trip.id);
       });
       
+      var copyBtn = document.createElement("button");
+      copyBtn.className = "trip-btn";
+      copyBtn.innerText = lang === "de" ? "Kopieren" : "Copy GPX";
+      copyBtn.addEventListener("click", function() {
+        var pts = decompressPointsCompact(trip.pointsStr);
+        var xml = generateGpxXml(pts);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(xml).then(function() {
+            alert(lang === "de" ? "GPX-Inhalt in die Zwischenablage kopiert!" : "GPX content copied to clipboard!");
+          }, function() {
+            fallbackCopyText(xml);
+          });
+        } else {
+          fallbackCopyText(xml);
+        }
+      });
+      
       var dlBtn = document.createElement("button");
       dlBtn.className = "trip-btn";
       dlBtn.innerText = t.btnDownload;
@@ -929,6 +959,7 @@
       });
       
       actions.appendChild(viewBtn);
+      actions.appendChild(copyBtn);
       actions.appendChild(dlBtn);
       actions.appendChild(delBtn);
       
@@ -1017,6 +1048,29 @@
       });
     }
     return points;
+  }
+
+  function fallbackCopyText(text) {
+    var textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      var successful = document.execCommand('copy');
+      var lang = getActiveLang();
+      if (successful) {
+        alert(lang === "de" ? "GPX-Inhalt in die Zwischenablage kopiert!" : "GPX content copied to clipboard!");
+      } else {
+        alert(lang === "de" ? "Kopieren fehlgeschlagen." : "Copying failed.");
+      }
+    } catch (err) {
+      alert(lang === "de" ? "Kopieren fehlgeschlagen: " + err : "Copying failed: " + err);
+    }
+    document.body.removeChild(textArea);
   }
 
   // Generate GPX XML content
@@ -1138,10 +1192,12 @@
     var mapSource = document.getElementById("map-source").value;
     var tileUrl = getLeafletTileUrl(mapSource);
     
-    leafletMapInstance = L.map('leaflet-map');
+    leafletMapInstance = L.map('leaflet-map', {
+      maxZoom: 17
+    });
     
     L.tileLayer(tileUrl, {
-      maxZoom: 18,
+      maxZoom: 17,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(leafletMapInstance);
     

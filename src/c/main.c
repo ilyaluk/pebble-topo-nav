@@ -397,7 +397,7 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
 // Button Clicks Handlers
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
   // Zoom In
-  if (s_zoom_level < 18) {
+  if (s_zoom_level < 17) {
     s_zoom_level++;
     layer_mark_dirty(s_header_layer);
     send_zoom_change();
