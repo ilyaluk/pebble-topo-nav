@@ -1,6 +1,9 @@
 # Changelog
 
-All notable changes to the TopoNav project will be documented in this file.
+## [2.1.0] - 2026-06-14
+
+### Added
+- **Interactive Map View for Recorded Trips**: Added a "View" button to the recorded trips list in Settings, allowing users to view completed walks on an interactive Leaflet map overlay using their active map source style. Displays total distance, walking duration, calculated average speed, and elevation gain/loss.
 
 ## [2.0.0] - 2026-06-08
 

@@ -209,7 +209,7 @@ Pebble.addEventListener('ready', function() {
 });
 
 // Helper to open the configuration url with all required parameters
-function openConfigPage(downloadGpxData, downloadName) {
+function openConfigPage(downloadGpxData, downloadName, viewGpxData, viewTripId) {
   var interval = localStorage.getItem('gpsInterval') || '5';
   var lang = localStorage.getItem('language') || 'de';
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
@@ -257,6 +257,10 @@ function openConfigPage(downloadGpxData, downloadName) {
   if (downloadGpxData && downloadName) {
     url += '&download_gpx=' + encodeURIComponent(downloadGpxData) + 
            '&download_name=' + encodeURIComponent(downloadName);
+  }
+  if (viewGpxData && viewTripId) {
+    url += '&view_gpx=' + encodeURIComponent(viewGpxData) + 
+           '&view_trip_id=' + viewTripId;
   }
   
   console.log('Opening config page with url: ' + url.substring(0, 150) + '...');
@@ -454,6 +458,23 @@ function triggerGpxDownload(tripId) {
   }
 }
 
+function triggerTripView(tripId) {
+  var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
+  var trip = null;
+  for (var i = 0; i < savedTrips.length; i++) {
+    if (savedTrips[i].id === tripId) {
+      trip = savedTrips[i];
+      break;
+    }
+  }
+  if (trip) {
+    var compressed = compressTrack(trip.points);
+    openConfigPage(null, null, compressed, tripId);
+  } else {
+    openConfigPage();
+  }
+}
+
 function deleteSavedTrip(tripId) {
   var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
   var updated = savedTrips.filter(function(t) {
@@ -548,6 +569,12 @@ Pebble.addEventListener('webviewclosed', function(e) {
         var deleteId = parseInt(responseStr.substring(7), 10);
         deleteSavedTrip(deleteId);
         openConfigPage();
+        return;
+      }
+      
+      if (responseStr.indexOf('view_') === 0) {
+        var viewId = parseInt(responseStr.substring(5), 10);
+        triggerTripView(viewId);
         return;
       }
       

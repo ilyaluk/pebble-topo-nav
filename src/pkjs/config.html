@@ -2,8 +2,9 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>TopoNav Einstellungen</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
     :root {
       --bg-color: #121212;
@@ -283,6 +284,38 @@
   </div>
 
   <button id="save-btn" class="btn">Speichern</button>
+
+  <!-- Modal for viewing recorded trip -->
+  <div id="trip-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 1000; box-sizing: border-box; justify-content: center; align-items: center; padding: 15px;">
+    <div class="card" style="width: 100%; max-width: 500px; height: 95%; max-height: 650px; margin: 0; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; position: relative;">
+      <button id="modal-close-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 50%; width: 32px; height: 32px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; z-index: 1010;">&times;</button>
+      <div class="card-title" id="modal-title" style="margin-right: 40px;">Tour-Details</div>
+      
+      <div id="leaflet-map" style="width: 100%; height: 320px; background: #222; border-radius: 8px; border: 1px solid var(--border-color); flex-shrink: 0; margin-bottom: 15px; z-index: 1005;"></div>
+      
+      <div style="flex-grow: 1; overflow-y: auto; padding-right: 5px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;" id="modal-lbl-dist">Distanz</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--primary); margin-top: 5px;" id="modal-val-dist">-- km</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;" id="modal-lbl-dur">Dauer</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-color); margin-top: 5px;" id="modal-val-dur">-- min</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;" id="modal-lbl-speed">Ø-Geschwindigkeit</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-color); margin-top: 5px;" id="modal-val-speed">-- km/h</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;" id="modal-lbl-ele">Höhenmeter</div>
+            <div style="font-size: 16px; font-weight: 700; color: var(--text-color); margin-top: 5px;" id="modal-val-ele">-- m / -- m</div>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); text-align: center; margin-bottom: 10px;" id="modal-val-date">--</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -333,7 +366,14 @@
       mapOsm: "OpenStreetMap Standard (Schnell / Klares Design)",
       fullscreenLabel: "Vollbild-Modus (Karte)",
       fullscreenOn: "An (Keine Header/Footer)",
-      fullscreenOff: "Aus (Standardlayout)"
+      fullscreenOff: "Aus (Standardlayout)",
+      btnView: "Ansehen",
+      modalTitle: "Tour-Details",
+      modalDist: "Distanz",
+      modalDur: "Dauer",
+      modalSpeed: "Ø-Geschwindigkeit",
+      modalEle: "Höhenmeter",
+      offlineWarning: "Internetverbindung erforderlich, um Karte zu laden."
     },
     en: {
       title: "TopoNav Settings",
@@ -376,7 +416,14 @@
       mapOsm: "OpenStreetMap Standard (Fast / Clean)",
       fullscreenLabel: "Fullscreen Mode (Map)",
       fullscreenOn: "On (No Header/Footer)",
-      fullscreenOff: "Off (Standard Layout)"
+      fullscreenOff: "Off (Standard Layout)",
+      btnView: "View",
+      modalTitle: "Trip Details",
+      modalDist: "Distance",
+      modalDur: "Duration",
+      modalSpeed: "Average Speed",
+      modalEle: "Elevation Profile",
+      offlineWarning: "Internet connection required to load map."
     }
   };
 
@@ -828,6 +875,13 @@
       var actions = document.createElement("div");
       actions.className = "trip-actions";
       
+      var viewBtn = document.createElement("button");
+      viewBtn.className = "trip-btn";
+      viewBtn.innerText = t.btnView || (lang === "de" ? "Ansehen" : "View");
+      viewBtn.addEventListener("click", function() {
+        window.location.href = "pebblejs://close#view_" + trip.id;
+      });
+      
       var dlBtn = document.createElement("button");
       dlBtn.className = "trip-btn";
       dlBtn.innerText = t.btnDownload;
@@ -844,6 +898,7 @@
         }
       });
       
+      actions.appendChild(viewBtn);
       actions.appendChild(dlBtn);
       actions.appendChild(delBtn);
       
@@ -928,6 +983,162 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  var leafletMapInstance = null;
+
+  function getLeafletTileUrl(mapSource) {
+    if (mapSource === 'hikebikemap') {
+      return 'https://tiles.wmflabs.org/hikebike/{z}/{x}/{y}.png';
+    } else if (mapSource === 'mtbmap') {
+      return 'http://tile.mtbmap.cz/mtbmap_tiles/{z}/{x}/{y}.png';
+    } else if (mapSource === 'osm') {
+      return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    } else { // opentopomap
+      return 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+    }
+  }
+
+  function showTripModal(points, tripId) {
+    var lang = getActiveLang();
+    var t = translations[lang] || translations.de;
+    
+    var tripMeta = null;
+    if (savedTripsMeta) {
+      for (var i = 0; i < savedTripsMeta.length; i++) {
+        if (savedTripsMeta[i].id === tripId) {
+          tripMeta = savedTripsMeta[i];
+          break;
+        }
+      }
+    }
+    
+    if (!tripMeta) return;
+    
+    var distKm = (tripMeta.distance / 1000).toFixed(2);
+    document.getElementById("modal-val-dist").innerText = distKm + " km";
+    
+    var durationMin = Math.round(tripMeta.duration / 60);
+    var durStr = durationMin + " min";
+    if (durationMin >= 60) {
+      var h = Math.floor(durationMin / 60);
+      var m = durationMin % 60;
+      durStr = h + "h " + m + "m";
+    }
+    document.getElementById("modal-val-dur").innerText = durStr;
+    
+    var avgSpeed = tripMeta.duration > 0 ? ((tripMeta.distance / tripMeta.duration) * 3.6).toFixed(1) : "0.0";
+    document.getElementById("modal-val-speed").innerText = avgSpeed + " km/h";
+    
+    var gain = 0;
+    var loss = 0;
+    for (var k = 0; k < points.length - 1; k++) {
+      if (points[k].ele !== undefined && points[k+1].ele !== undefined) {
+        var diff = points[k+1].ele - points[k].ele;
+        if (diff > 0) gain += diff;
+        else loss += Math.abs(diff);
+      }
+    }
+    document.getElementById("modal-val-ele").innerText = "+" + Math.round(gain) + "m / -" + Math.round(loss) + "m";
+    
+    var dateObj = new Date(tripMeta.date);
+    document.getElementById("modal-val-date").innerText = dateObj.toLocaleDateString(lang === "de" ? "de-DE" : "en-US") + " " + dateObj.toLocaleTimeString(lang === "de" ? "de-DE" : "en-US", {hour: '2-digit', minute:'2-digit'});
+    
+    document.getElementById("modal-title").innerText = t.modalTitle;
+    document.getElementById("modal-lbl-dist").innerText = t.modalDist;
+    document.getElementById("modal-lbl-dur").innerText = t.modalDur;
+    document.getElementById("modal-lbl-speed").innerText = t.modalSpeed;
+    document.getElementById("modal-lbl-ele").innerText = t.modalEle;
+    
+    var modal = document.getElementById("trip-modal");
+    modal.style.display = "flex";
+    
+    if (typeof L === 'undefined') {
+      console.warn("Leaflet map library is not loaded.");
+      document.getElementById("leaflet-map").innerHTML = '<div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); padding: 20px; text-align: center;">' + (t.offlineWarning || "Internet connection required to load map.") + '</div>';
+      return;
+    }
+    
+    document.getElementById("leaflet-map").innerHTML = "";
+
+    if (leafletMapInstance) {
+      leafletMapInstance.remove();
+    }
+    
+    var mapSource = document.getElementById("map-source").value;
+    var tileUrl = getLeafletTileUrl(mapSource);
+    
+    leafletMapInstance = L.map('leaflet-map');
+    
+    L.tileLayer(tileUrl, {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(leafletMapInstance);
+    
+    var latlngs = points.map(function(p) {
+      return [p.lat, p.lon];
+    });
+    
+    var polyline = L.polyline(latlngs, {color: 'var(--primary)', weight: 4}).addTo(leafletMapInstance);
+    
+    if (latlngs.length > 0) {
+      L.circleMarker(latlngs[0], {radius: 6, fillColor: '#4caf50', color: '#fff', weight: 2, fillOpacity: 1}).addTo(leafletMapInstance);
+      L.circleMarker(latlngs[latlngs.length - 1], {radius: 6, fillColor: '#f44336', color: '#fff', weight: 2, fillOpacity: 1}).addTo(leafletMapInstance);
+    }
+    
+    leafletMapInstance.fitBounds(polyline.getBounds(), {padding: [20, 20]});
+    
+    setTimeout(function() {
+      if (leafletMapInstance) {
+        leafletMapInstance.invalidateSize();
+      }
+    }, 250);
+  }
+
+  document.getElementById("modal-close-btn").addEventListener("click", function() {
+    document.getElementById("trip-modal").style.display = "none";
+    if (leafletMapInstance) {
+      leafletMapInstance.remove();
+      leafletMapInstance = null;
+    }
+  });
+
+  // Check for view triggers
+  var viewData = getQueryParam("view_gpx");
+  var viewTripId = parseInt(getQueryParam("view_trip_id") || "0", 10);
+  if (viewData && viewTripId) {
+    try {
+      var pts = decompressTrack(viewData);
+      if (pts.length > 0) {
+        showTripModal(pts, viewTripId);
+        
+        // Clean URL params to prevent repeated modal display on refresh
+        if (window.history.replaceState) {
+          var cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+          var interval = getQueryParam("interval");
+          var lang = getQueryParam("lang");
+          var isNav = getQueryParam("is_nav");
+          var trips = getQueryParam("trips");
+          var routes = getQueryParam("routes");
+          var activeRouteId = getQueryParam("active_route_id");
+          var fullscreen = getQueryParam("fullscreen");
+          var params = [];
+          if (interval) params.push("interval=" + interval);
+          if (lang) params.push("lang=" + lang);
+          if (isNav) params.push("is_nav=" + isNav);
+          if (trips) params.push("trips=" + trips);
+          if (routes) params.push("routes=" + routes);
+          if (activeRouteId) params.push("active_route_id=" + activeRouteId);
+          if (fullscreen) params.push("fullscreen=" + fullscreen);
+          if (params.length > 0) {
+            cleanUrl += "?" + params.join("&");
+          }
+          window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse view track: ' + e.message);
+    }
   }
 
   // Check for download triggers
