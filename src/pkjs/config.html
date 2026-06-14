@@ -905,14 +905,18 @@
       viewBtn.className = "trip-btn";
       viewBtn.innerText = t.btnView || (lang === "de" ? "Ansehen" : "View");
       viewBtn.addEventListener("click", function() {
-        window.location.href = "pebblejs://close#view_" + trip.id;
+        var pts = decompressPointsCompact(trip.pointsStr);
+        showTripModal(pts, trip.id);
       });
       
       var dlBtn = document.createElement("button");
       dlBtn.className = "trip-btn";
       dlBtn.innerText = t.btnDownload;
       dlBtn.addEventListener("click", function() {
-        window.location.href = "pebblejs://close#download_" + trip.id;
+        var pts = decompressPointsCompact(trip.pointsStr);
+        var xml = generateGpxXml(pts);
+        var tripDateStr = new Date(trip.date).toISOString().replace(/:/g, '-').split('.')[0];
+        triggerFileDownload(xml, 'route_' + tripDateStr);
       });
       
       var delBtn = document.createElement("button");
@@ -970,6 +974,46 @@
         lon: lastLon / 1000000,
         ele: lastEle,
         time: lastTime
+      });
+    }
+    return points;
+  }
+
+  function decompressPointsCompact(compressedStr) {
+    if (!compressedStr) return [];
+    var segments = compressedStr.split('|');
+    var points = [];
+    var lastLat = 0;
+    var lastLon = 0;
+    var lastEle = 0;
+    var lastTime = 0;
+    
+    for (var i = 0; i < segments.length; i++) {
+      var parts = segments[i].split(',');
+      if (parts.length < 4) continue;
+      
+      var dLat = parseInt(parts[0], 36);
+      var dLon = parseInt(parts[1], 36);
+      var dEle = parseInt(parts[2], 36);
+      var dTime = parseInt(parts[3], 36);
+      
+      if (i === 0) {
+        lastLat = dLat;
+        lastLon = dLon;
+        lastEle = dEle;
+        lastTime = dTime;
+      } else {
+        lastLat += dLat;
+        lastLon += dLon;
+        lastEle += dEle;
+        lastTime += dTime;
+      }
+      
+      points.push({
+        lat: lastLat / 100000,
+        lon: lastLon / 100000,
+        ele: lastEle,
+        time: lastTime * 1000
       });
     }
     return points;
@@ -1129,78 +1173,7 @@
     }
   });
 
-  // Check for view triggers
-  var viewData = getQueryParam("view_gpx");
-  var viewTripId = parseInt(getQueryParam("view_trip_id") || "0", 10);
-  if (viewData && viewTripId) {
-    try {
-      var pts = decompressTrack(viewData);
-      if (pts.length > 0) {
-        showTripModal(pts, viewTripId);
-        
-        // Clean URL params to prevent repeated modal display on refresh
-        if (window.history.replaceState) {
-          var cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-          var interval = getQueryParam("interval");
-          var lang = getQueryParam("lang");
-          var isNav = getQueryParam("is_nav");
-          var trips = getQueryParam("trips");
-          var routes = getQueryParam("routes");
-          var activeRouteId = getQueryParam("active_route_id");
-          var fullscreen = getQueryParam("fullscreen");
-          var showBreadcrumbs = getQueryParam("show_breadcrumbs");
-          var params = [];
-          if (interval) params.push("interval=" + interval);
-          if (lang) params.push("lang=" + lang);
-          if (isNav) params.push("is_nav=" + isNav);
-          if (trips) params.push("trips=" + trips);
-          if (routes) params.push("routes=" + routes);
-          if (activeRouteId) params.push("active_route_id=" + activeRouteId);
-          if (fullscreen) params.push("fullscreen=" + fullscreen);
-          if (showBreadcrumbs) params.push("show_breadcrumbs=" + showBreadcrumbs);
-          if (params.length > 0) {
-            cleanUrl += "?" + params.join("&");
-          }
-          window.history.replaceState({path: cleanUrl}, '', cleanUrl);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to parse view track: ' + e.message);
-    }
-  }
 
-  // Check for download triggers
-  var downloadData = getQueryParam("download_gpx");
-  var downloadName = getQueryParam("download_name") || "route";
-  if (downloadData) {
-    try {
-      var pts = decompressTrack(downloadData);
-      if (pts.length > 0) {
-        var gpxXml = generateGpxXml(pts);
-        triggerFileDownload(gpxXml, downloadName);
-        
-        // Clean URL params to prevent repeated downloads on refresh
-        if (window.history.replaceState) {
-          var cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-          var interval = getQueryParam("interval");
-          var lang = getQueryParam("lang");
-          var isNav = getQueryParam("is_nav");
-          var trips = getQueryParam("trips");
-          var params = [];
-          if (interval) params.push("interval=" + interval);
-          if (lang) params.push("lang=" + lang);
-          if (isNav) params.push("is_nav=" + isNav);
-          if (trips) params.push("trips=" + trips);
-          if (params.length > 0) {
-            cleanUrl += "?" + params.join("&");
-          }
-          window.history.replaceState({path: cleanUrl}, '', cleanUrl);
-        }
-      }
-    } catch (e) {
-      console.error('Download failed: ' + e.message);
-    }
-  }
 
   // Apply language at start
   applyLanguage(document.getElementById("app-lang").value);

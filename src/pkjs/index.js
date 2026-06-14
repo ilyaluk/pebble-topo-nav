@@ -209,7 +209,7 @@ Pebble.addEventListener('ready', function() {
 });
 
 // Helper to open the configuration url with all required parameters
-function openConfigPage(downloadGpxData, downloadName, viewGpxData, viewTripId) {
+function openConfigPage() {
   var interval = localStorage.getItem('gpsInterval') || '5';
   var lang = localStorage.getItem('language') || 'de';
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
@@ -217,14 +217,17 @@ function openConfigPage(downloadGpxData, downloadName, viewGpxData, viewTripId) 
   var showBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
   var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
   
-  // Serialize only metadata to stay within query param limits
-  var tripsMeta = savedTrips.map(function(t) {
+  // Keep only the latest 8 trips for the settings page to prevent URL overflow
+  var recentTrips = savedTrips.slice(-8);
+  
+  var tripsMeta = recentTrips.map(function(t) {
     return {
       id: t.id,
       date: t.date,
       distance: t.distance,
       duration: t.duration,
-      pointsCount: t.points ? t.points.length : 0
+      pointsCount: t.points ? t.points.length : 0,
+      pointsStr: compressPointsCompact(t.points)
     };
   });
 
@@ -256,16 +259,7 @@ function openConfigPage(downloadGpxData, downloadName, viewGpxData, viewTripId) 
             '&routes=' + encodeURIComponent(JSON.stringify(routesMeta)) +
             '&active_route_id=' + (localStorage.getItem('activeRouteId') || '0');
             
-  if (downloadGpxData && downloadName) {
-    url += '&download_gpx=' + encodeURIComponent(downloadGpxData) + 
-           '&download_name=' + encodeURIComponent(downloadName);
-  }
-  if (viewGpxData && viewTripId) {
-    url += '&view_gpx=' + encodeURIComponent(viewGpxData) + 
-           '&view_trip_id=' + viewTripId;
-  }
-  
-  console.log('Opening config page with url: ' + url.substring(0, 150) + '...');
+  console.log('Opening config page with url: ' + url.substring(0, 150) + '... Length: ' + url.length);
   Pebble.openURL(url);
 }
 
@@ -441,40 +435,51 @@ function compressTrack(points) {
   return segments.join('|');
 }
 
-function triggerGpxDownload(tripId) {
-  var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-  var trip = null;
-  for (var i = 0; i < savedTrips.length; i++) {
-    if (savedTrips[i].id === tripId) {
-      trip = savedTrips[i];
-      break;
-    }
+function decimatePoints(points, maxPoints) {
+  if (!points || points.length <= maxPoints) return points;
+  var decimated = [];
+  var step = Math.ceil((points.length - 1) / (maxPoints - 1));
+  for (var i = 0; i < points.length - 1; i += step) {
+    decimated.push(points[i]);
   }
-  if (trip) {
-    var compressed = compressTrack(trip.points);
-    var tripDateStr = new Date(trip.date).toISOString().replace(/:/g, '-').split('.')[0];
-    var downloadName = 'route_' + tripDateStr;
-    openConfigPage(compressed, downloadName);
-  } else {
-    openConfigPage();
-  }
+  decimated.push(points[points.length - 1]);
+  return decimated;
 }
 
-function triggerTripView(tripId) {
-  var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
-  var trip = null;
-  for (var i = 0; i < savedTrips.length; i++) {
-    if (savedTrips[i].id === tripId) {
-      trip = savedTrips[i];
-      break;
+function compressPointsCompact(points) {
+  if (!points || points.length === 0) return '';
+  var maxPts = 50; // Decimate to max 50 points for settings view and download
+  var pts = decimatePoints(points, maxPts);
+  
+  var segments = [];
+  var lastLat = 0;
+  var lastLon = 0;
+  var lastEle = 0;
+  var lastTime = 0;
+  
+  for (var i = 0; i < pts.length; i++) {
+    var p = pts[i];
+    var latVal = Math.round(p.lat * 100000);
+    var lonVal = Math.round(p.lon * 100000);
+    var eleVal = Math.round(p.ele || 0);
+    var timeVal = Math.round((p.time || 0) / 1000); // Store time in seconds
+    
+    if (i === 0) {
+      segments.push(latVal.toString(36) + ',' + lonVal.toString(36) + ',' + eleVal.toString(36) + ',' + timeVal.toString(36));
+    } else {
+      var dLat = latVal - lastLat;
+      var dLon = lonVal - lastLon;
+      var dEle = eleVal - lastEle;
+      var dTime = timeVal - lastTime;
+      segments.push(dLat.toString(36) + ',' + dLon.toString(36) + ',' + dEle.toString(36) + ',' + dTime.toString(36));
     }
+    
+    lastLat = latVal;
+    lastLon = lonVal;
+    lastEle = eleVal;
+    lastTime = timeVal;
   }
-  if (trip) {
-    var compressed = compressTrack(trip.points);
-    openConfigPage(null, null, compressed, tripId);
-  } else {
-    openConfigPage();
-  }
+  return segments.join('|');
 }
 
 function deleteSavedTrip(tripId) {
@@ -578,21 +583,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
         return;
       }
       
-      if (responseStr.indexOf('view_') === 0) {
-        var viewId = parseInt(responseStr.substring(5), 10);
-        setTimeout(function() {
-          triggerTripView(viewId);
-        }, 350);
-        return;
-      }
-      
-      if (responseStr.indexOf('download_') === 0) {
-        var downloadId = parseInt(responseStr.substring(9), 10);
-        setTimeout(function() {
-          triggerGpxDownload(downloadId);
-        }, 350);
-        return;
-      }
+
       
       if (responseStr.indexOf('delete_route_') === 0) {
         var delRouteId = parseInt(responseStr.substring(13), 10);
