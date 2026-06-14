@@ -563,40 +563,52 @@ Pebble.addEventListener('webviewclosed', function(e) {
       
       if (responseStr === 'toggle_nav') {
         toggleRecordingState();
-        openConfigPage();
+        setTimeout(function() {
+          openConfigPage();
+        }, 350);
         return;
       }
       
       if (responseStr.indexOf('delete_') === 0 && responseStr.indexOf('delete_route_') === -1) {
         var deleteId = parseInt(responseStr.substring(7), 10);
         deleteSavedTrip(deleteId);
-        openConfigPage();
+        setTimeout(function() {
+          openConfigPage();
+        }, 350);
         return;
       }
       
       if (responseStr.indexOf('view_') === 0) {
         var viewId = parseInt(responseStr.substring(5), 10);
-        triggerTripView(viewId);
+        setTimeout(function() {
+          triggerTripView(viewId);
+        }, 350);
         return;
       }
       
       if (responseStr.indexOf('download_') === 0) {
         var downloadId = parseInt(responseStr.substring(9), 10);
-        triggerGpxDownload(downloadId);
+        setTimeout(function() {
+          triggerGpxDownload(downloadId);
+        }, 350);
         return;
       }
       
       if (responseStr.indexOf('delete_route_') === 0) {
         var delRouteId = parseInt(responseStr.substring(13), 10);
         deleteSavedRoute(delRouteId);
-        openConfigPage();
+        setTimeout(function() {
+          openConfigPage();
+        }, 350);
         return;
       }
       
       if (responseStr.indexOf('activate_route_') === 0) {
         var actRouteId = parseInt(responseStr.substring(15), 10);
         activateSavedRoute(actRouteId);
-        openConfigPage();
+        setTimeout(function() {
+          openConfigPage();
+        }, 350);
         return;
       }
       
