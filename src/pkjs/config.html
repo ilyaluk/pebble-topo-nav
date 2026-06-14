@@ -247,6 +247,12 @@
       <option value="false" selected>Aus (Standardlayout)</option>
       <option value="true">An (Keine Header/Footer)</option>
     </select>
+
+    <label for="show-breadcrumbs" id="label-show-breadcrumbs" style="margin-top: 15px;">Zurückgelegte Route anzeigen / Show Traveled Route</label>
+    <select id="show-breadcrumbs">
+      <option value="true" selected>An / On</option>
+      <option value="false">Aus / Off</option>
+    </select>
   </div>
 
   <!-- GPX Import -->
@@ -367,6 +373,9 @@
       fullscreenLabel: "Vollbild-Modus (Karte)",
       fullscreenOn: "An (Keine Header/Footer)",
       fullscreenOff: "Aus (Standardlayout)",
+      breadcrumbsLabel: "Zurückgelegte Route anzeigen",
+      breadcrumbsOn: "An",
+      breadcrumbsOff: "Aus",
       btnView: "Ansehen",
       modalTitle: "Tour-Details",
       modalDist: "Distanz",
@@ -417,6 +426,9 @@
       fullscreenLabel: "Fullscreen Mode (Map)",
       fullscreenOn: "On (No Header/Footer)",
       fullscreenOff: "Off (Standard Layout)",
+      breadcrumbsLabel: "Show Traveled Route",
+      breadcrumbsOn: "On",
+      breadcrumbsOff: "Off",
       btnView: "View",
       modalTitle: "Trip Details",
       modalDist: "Distance",
@@ -438,6 +450,7 @@
     var gpsIntervalVal = document.getElementById("gps-interval").value;
     var mapSourceVal = document.getElementById("map-source").value;
     var fullscreenVal = document.getElementById("fullscreen-map").value;
+    var showBreadcrumbsVal = document.getElementById("show-breadcrumbs").value;
     
     document.getElementById("page-title").innerText = t.title;
     document.getElementById("card-general").innerText = t.general;
@@ -461,11 +474,17 @@
     var fullscreenSelect = document.getElementById("fullscreen-map");
     fullscreenSelect.options[0].text = t.fullscreenOff;
     fullscreenSelect.options[1].text = t.fullscreenOn;
+
+    document.getElementById("label-show-breadcrumbs").innerText = t.breadcrumbsLabel;
+    var breadcrumbsSelect = document.getElementById("show-breadcrumbs");
+    breadcrumbsSelect.options[0].text = t.breadcrumbsOn;
+    breadcrumbsSelect.options[1].text = t.breadcrumbsOff;
     
     // Restore saved values
     document.getElementById("gps-interval").value = gpsIntervalVal;
     document.getElementById("map-source").value = mapSourceVal;
     document.getElementById("fullscreen-map").value = fullscreenVal;
+    document.getElementById("show-breadcrumbs").value = showBreadcrumbsVal;
     
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-b").innerText = t.methodB;
@@ -727,12 +746,14 @@
     var appLang = document.getElementById("app-lang").value;
     var mapSource = document.getElementById("map-source").value;
     var fullscreen = document.getElementById("fullscreen-map").value === "true";
+    var showBreadcrumbs = document.getElementById("show-breadcrumbs").value === "true";
     
     var settings = {
       gpsInterval: gpsInterval,
       language: appLang,
       mapSource: mapSource,
-      fullscreen: fullscreen
+      fullscreen: fullscreen,
+      showBreadcrumbs: showBreadcrumbs
     };
     
     if (gpxCleared) {
@@ -782,6 +803,11 @@
   var initialFullscreen = getQueryParam("fullscreen");
   if (initialFullscreen) {
     document.getElementById("fullscreen-map").value = initialFullscreen;
+  }
+  
+  var initialBreadcrumbs = getQueryParam("show_breadcrumbs");
+  if (initialBreadcrumbs) {
+    document.getElementById("show-breadcrumbs").value = initialBreadcrumbs;
   }
   
   // Listen for language dropdown change
@@ -1122,6 +1148,7 @@
           var routes = getQueryParam("routes");
           var activeRouteId = getQueryParam("active_route_id");
           var fullscreen = getQueryParam("fullscreen");
+          var showBreadcrumbs = getQueryParam("show_breadcrumbs");
           var params = [];
           if (interval) params.push("interval=" + interval);
           if (lang) params.push("lang=" + lang);
@@ -1130,6 +1157,7 @@
           if (routes) params.push("routes=" + routes);
           if (activeRouteId) params.push("active_route_id=" + activeRouteId);
           if (fullscreen) params.push("fullscreen=" + fullscreen);
+          if (showBreadcrumbs) params.push("show_breadcrumbs=" + showBreadcrumbs);
           if (params.length > 0) {
             cleanUrl += "?" + params.join("&");
           }

@@ -114,7 +114,7 @@ function drawLineThick(buffer, x0, y0, x1, y1, thickness, r, g, b) {
 }
 
 // Stitch map tiles, draw GPX track, overlay user position, and return GColor8 buffer
-function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, closestIdx) {
+function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, closestIdx, recordedTrack, showBreadcrumbs) {
   // 1. Initialize RGBA viewport buffer (filled with light grey color)
   var rgbaBuffer = new Uint8Array(MAP_WIDTH * MAP_HEIGHT * 4);
   for (var i = 0; i < rgbaBuffer.length; i += 4) {
@@ -173,6 +173,42 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, close
           }
         }
       }
+    }
+  }
+  
+  // 4.5. Render breadcrumbs (traveled route) overlay underneath the planned GPX route
+  if (showBreadcrumbs && recordedTrack && recordedTrack.length > 1) {
+    var pointsToRender = recordedTrack;
+    if (recordedTrack.length > 500) {
+      pointsToRender = [];
+      var step = Math.ceil((recordedTrack.length - 1) / 499);
+      for (var i = 0; i < recordedTrack.length - 1; i += step) {
+        pointsToRender.push(recordedTrack[i]);
+      }
+      pointsToRender.push(recordedTrack[recordedTrack.length - 1]);
+    }
+    
+    for (var k = 0; k < pointsToRender.length - 1; k++) {
+      var pt1 = pointsToRender[k];
+      var pt2 = pointsToRender[k + 1];
+      
+      var pix1 = latLonToPixels(pt1.lat, pt1.lon, zoom);
+      var pix2 = latLonToPixels(pt2.lat, pt2.lon, zoom);
+      
+      var sx1 = Math.floor(pix1.x - tlX);
+      var sy1 = Math.floor(pix1.y - tlY);
+      var sx2 = Math.floor(pix2.x - tlX);
+      var sy2 = Math.floor(pix2.y - tlY);
+      
+      // Bounding box clipping: discard segments where both endpoints are outside the viewport + 50px margin
+      var p1Inside = (sx1 >= -50 && sx1 <= MAP_WIDTH + 50 && sy1 >= -50 && sy1 <= MAP_HEIGHT + 50);
+      var p2Inside = (sx2 >= -50 && sx2 <= MAP_WIDTH + 50 && sy2 >= -50 && sy2 <= MAP_HEIGHT + 50);
+      
+      if (!p1Inside && !p2Inside) {
+        continue;
+      }
+      
+      drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 0, 85, 255); // 3px Cobalt Blue line
     }
   }
   

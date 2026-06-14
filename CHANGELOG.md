@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0] - 2026-06-14
+
+### Added
+- **Real-Time Traveled Route Overlay (Breadcrumbs)**: Added real-time rendering of the user's traveled path (breadcrumb trail) on the watch map in a distinct Cobalt Blue color (3px thickness). Draw rendering takes place underneath the planned route line to preserve upcoming path legibility.
+- **Show Traveled Route Settings Toggle**: Introduced a new settings toggle under the "Allgemein" section of the configuration page to show/hide the breadcrumb overlay dynamically. Includes full German/English localizations.
+- **Graphics Rendering Optimizations**: Integrated a decimation filter to cap maximum drawn path points to 500 and a 50px viewport bounding box padding/clipping filter to keep map panning and zooming smooth.
+
 ## [2.1.0] - 2026-06-14
 
 ### Added

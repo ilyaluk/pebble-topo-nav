@@ -214,6 +214,7 @@ function openConfigPage(downloadGpxData, downloadName, viewGpxData, viewTripId) 
   var lang = localStorage.getItem('language') || 'de';
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
   var fullscreen = localStorage.getItem('fullscreen') || 'false';
+  var showBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
   var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
   
   // Serialize only metadata to stay within query param limits
@@ -249,6 +250,7 @@ function openConfigPage(downloadGpxData, downloadName, viewGpxData, viewTripId) 
             '&lang=' + lang + 
             '&map=' + mapSource + 
             '&fullscreen=' + fullscreen + 
+            '&show_breadcrumbs=' + showBreadcrumbs + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
             '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
             '&routes=' + encodeURIComponent(JSON.stringify(routesMeta)) +
@@ -618,6 +620,15 @@ Pebble.addEventListener('webviewclosed', function(e) {
       if (fullscreen !== oldFullscreen) {
         console.log('Fullscreen setting changed from ' + oldFullscreen + ' to ' + fullscreen);
         updateMapDimensions();
+      }
+
+      var showBreadcrumbs = settings.showBreadcrumbs !== undefined ? settings.showBreadcrumbs : true;
+      var oldShowBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
+      localStorage.setItem('showBreadcrumbs', showBreadcrumbs ? 'true' : 'false');
+
+      if (showBreadcrumbs !== oldShowBreadcrumbs) {
+        console.log('Show breadcrumbs setting changed from ' + oldShowBreadcrumbs + ' to ' + showBreadcrumbs);
+        isSendingMap = false;
       }
       
       if (mapSource !== oldMapSource) {
@@ -1097,13 +1108,16 @@ function renderAndSendMap() {
 // Draw route overlays and trigger the AppMessage transmission loop
 function doRenderAndChunkSend(tileCache) {
   try {
+    var showBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
     var gcolor8Map = graphics.renderViewport(
       currentLocation.lat,
       currentLocation.lon,
       currentZoom,
       gpxTrack,
       tileCache,
-      closestTrackPointIdx
+      closestTrackPointIdx,
+      recordedTrack,
+      showBreadcrumbs
     );
     
     // Chunked Transmission Loop
