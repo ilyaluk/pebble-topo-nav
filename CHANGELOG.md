@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.4.0] - 2026-06-14
+
+### Changed
+- **Inline Recorded Trips Mapping and GPX Downloads**: Redesigned the "View" map modal and GPX file downloads to execute locally and inline within the settings WebView. This eliminates the legacy behavior of closing and reopening the settings WebView, completely preventing transition crashes and settings page collapse.
+- **Embedded Route Compression**: Companion app now compresses coordinates for the latest 8 trips using a custom Base36 delta-compression scheme and embeds them inside the initial settings URL payload, keeping URL length well within Pebble limits.
+
 ## [2.3.0] - 2026-06-14
 
 ### Added
