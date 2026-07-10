@@ -45,7 +45,7 @@ Die Akzeptanzkriterien müssen klar strukturiert sein und werden unterteilt in:
 ## 4. Git-Workflow & Branching-Modell
 
 * **Feature Branches:** Für jede User Story wird ein eigener Branch erstellt und genutzt (z. B. `feature/US-[ID]-[kurzbeschreibung]`).
-* **Automatisierte Tests:** Vor dem Merge muss so weit wie möglich automatisiert getestet werden (z. B. über automatisierte Test-Suiten oder CI/CD-Pipelines), um sicherzustellen, dass die Anforderungen korrekt und fehlerfrei umgesetzt wurden.
+* **Verifikation & Tests:** Vor dem Merge muss der Code erfolgreich kompilieren (`pebble build`). Neue Features sind zwingend lokal im Pebble-Emulator (z. B. `pebble install --emulator basalt`) oder auf einer physischen Uhr zu testen, um sicherzustellen, dass die Anforderungen korrekt und fehlerfrei umgesetzt wurden.
 * **Merge & Abschluss:** Nach erfolgreicher Verifikation wird der Branch gemergt und die User Story im Repository (z. B. GitHub Issues oder GitHub Project) als abgeschlossen markiert/geschlossen.
 
 ---
@@ -63,7 +63,7 @@ Die Akzeptanzkriterien müssen klar strukturiert sein und werden unterteilt in:
 Eine User Story gilt erst dann als abgeschlossen ("Done"), wenn alle Punkte dieser Checkliste erfüllt sind:
 
 - [ ] **Akzeptanzkriterien erfüllt:** Alle funktionalen und nicht-funktionalen Akzeptanzkriterien der Story sind erfolgreich umgesetzt.
-- [ ] **Tests erfolgreich:** Automatisierte Tests decken die neue Funktionalität ab und laufen lokal sowie in der CI-Pipeline fehlerfrei durch.
+- [ ] **Tests erfolgreich:** Der Code kompiliert fehlerfrei (`pebble build`) und die Funktionalität wurde im Emulator oder auf einer physischen Uhr erfolgreich getestet.
 - [ ] **Dokumentation aktualisiert:** Die `README.md` beschreibt die neuen Features und Änderungen.
 - [ ] **Changelog gepflegt:** Die Änderungen wurden in der `CHANGELOG.md` nachgetragen.
 - [ ] **Code-Review & Merge:** Der Feature-Branch wurde erfolgreich in den Haupt-Branch gemergt.
