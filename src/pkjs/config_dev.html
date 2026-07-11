@@ -275,26 +275,48 @@
     </select>
 
     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
-      <div id="label-dashboard-fields" style="font-weight: 600; margin-bottom: 10px; font-size: 14px;">Dashboard-Datenfelder / Dashboard Data Fields</div>
+      <div id="label-dashboard-fields" style="font-weight: 600; margin-bottom: 5px; font-size: 14px;">Dashboard-Datenfelder / Dashboard Data Fields</div>
+      <div id="label-dashboard-limit" style="font-size: 12px; color: #666; margin-bottom: 10px;">(Maximal 4 auswählbar / Max 4 selectable)</div>
+      
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
-        <input type="checkbox" id="field-speed" value="1" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <input type="checkbox" id="field-speed" value="1" class="dashboard-cb" checked style="margin-right: 10px; width: 18px; height: 18px;">
         <span id="label-field-speed">Ø-Geschwindigkeit / Speed</span>
       </label>
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
-        <input type="checkbox" id="field-dist" value="2" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <input type="checkbox" id="field-dist" value="2" class="dashboard-cb" checked style="margin-right: 10px; width: 18px; height: 18px;">
         <span id="label-field-dist">Distanz / Distance</span>
       </label>
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
-        <input type="checkbox" id="field-gain" value="4" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <input type="checkbox" id="field-gain" value="4" class="dashboard-cb" checked style="margin-right: 10px; width: 18px; height: 18px;">
         <span id="label-field-gain">Höhenmeter Anstieg / Elevation Gain</span>
       </label>
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
-        <input type="checkbox" id="field-loss" value="8" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <input type="checkbox" id="field-loss" value="8" class="dashboard-cb" checked style="margin-right: 10px; width: 18px; height: 18px;">
         <span id="label-field-loss">Höhenmeter Abstieg / Elevation Loss</span>
       </label>
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
-        <input type="checkbox" id="field-coords" value="16" checked style="margin-right: 10px; width: 18px; height: 18px;">
-        <span id="label-field-coords">GPS-Koordinaten / GPS Coordinates</span>
+        <input type="checkbox" id="field-alt" value="16" class="dashboard-cb" style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-alt">Aktuelle Höhe / Altitude</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-time" value="32" class="dashboard-cb" style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-time">Uhrzeit / Time of Day</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-duration" value="64" class="dashboard-cb" style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-duration">Dauer / Duration</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-heading" value="128" class="dashboard-cb" style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-heading">Himmelsrichtung / Heading</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-battery" value="256" class="dashboard-cb" style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-battery">Akkustand Uhr / Watch Battery</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-dist-dest" value="512" class="dashboard-cb" style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-dist-dest">Distanz zum Ziel / Distance to Dest</span>
       </label>
     </div>
   </div>
@@ -1307,6 +1329,33 @@
   });
 
 
+
+  // Checkbox limit logic
+  var maxFields = 4;
+  var dashboardCheckboxes = document.querySelectorAll('.dashboard-cb');
+  
+  function updateCheckboxStates() {
+    var checkedCount = document.querySelectorAll('.dashboard-cb:checked').length;
+    dashboardCheckboxes.forEach(function(cb) {
+      if (!cb.checked) {
+        cb.disabled = (checkedCount >= maxFields);
+      }
+    });
+  }
+  
+  dashboardCheckboxes.forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var checkedCount = document.querySelectorAll('.dashboard-cb:checked').length;
+      if (checkedCount > maxFields) {
+        this.checked = false; // Revert
+        alert(document.getElementById("app-lang").value === 'de' ? "Maximal 4 Felder erlaubt." : "Maximum 4 fields allowed.");
+      }
+      updateCheckboxStates();
+    });
+  });
+  
+  // Initial state check
+  updateCheckboxStates();
 
   // Apply language at start
   applyLanguage(document.getElementById("app-lang").value);

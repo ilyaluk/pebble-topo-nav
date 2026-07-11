@@ -50,7 +50,9 @@
       "FULLSCREEN_MODE",
       "DASHBOARD_FIELDS",
       "NAV_POPUP_STATE",
-      "NAV_VIEW_MODE"
+      "NAV_VIEW_MODE",
+      "GPS_ALT_STR",
+      "HEADING_STR"
     ],
     "resources": {
       "media": []

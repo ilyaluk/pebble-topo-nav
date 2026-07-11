@@ -8,6 +8,8 @@
 - **US-1: Big Navigation View**: Added an auto-popup full-screen navigation view that shows a large arrow and distance when approaching a turn (< 50m). Can be toggled in settings.
 - **US-3: Dynamic Grid Layout Architecture**: The dashboard is no longer a fixed layout. Users can now individually toggle data fields (Speed, Distance, Elevation Gain, Elevation Loss, Coordinates) via the settings. The watch automatically adjusts the grid layout and maximizes font sizes based on the number of active fields.
 
+- **US-5: Fully Dynamic Dashboard & New Metrics**: Expanded the dynamic grid engine to support a total of 10 different metrics (Average Speed, Distance, Elevation Gain, Elevation Loss, Coordinates, Battery Level, Duration, Current Altitude, Compass Heading, Distance to Destination). Users can select up to 4 optional fields to display alongside the fixed coordinates. Watch battery and duration are updated natively via Pebble background services.
+
 ## [2.5.0] - 2026-06-14
 
 ### Added

@@ -831,6 +831,14 @@ function onGPSSuccess(position) {
   updateWatchNavigationAndMap();
 }
 
+function getHeadingString(heading, isEnglish) {
+  if (heading < 0 || heading === null || heading === undefined) return "---";
+  var val = Math.floor((heading / 22.5) + 0.5);
+  var arrEn = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  var arrDe = ["N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return isEnglish ? arrEn[(val % 16)] : arrDe[(val % 16)];
+}
+
 function onGPSError(err) {
   console.log('GPS Error: ' + err.message);
   
@@ -844,7 +852,9 @@ function onGPSError(err) {
     LANGUAGE: isEnglish ? 1 : 0,
     FULLSCREEN_MODE: fullscreenMode,
     DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10),
-    NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10)
+    NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10),
+    GPS_ALT_STR: "---",
+    HEADING_STR: "---"
   });
 }
 
@@ -862,7 +872,9 @@ function updateWatchNavigationAndMap() {
       ACTIVE_ROUTE_ID: activeRouteId,
       FULLSCREEN_MODE: fullscreenMode,
       DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10),
-      NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10)
+      NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10),
+      GPS_ALT_STR: "---",
+      HEADING_STR: "---"
     });
     return;
   }
@@ -879,7 +891,9 @@ function updateWatchNavigationAndMap() {
     ACTIVE_ROUTE_ID: activeRouteId,
     FULLSCREEN_MODE: fullscreenMode,
     DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10),
-    NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10)
+    NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10),
+    GPS_ALT_STR: Math.round(currentLocation.altitude) + 'm',
+    HEADING_STR: getHeadingString(currentHeading, isEnglish)
   };
 
   var offRoute = false;

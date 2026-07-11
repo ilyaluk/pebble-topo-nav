@@ -47,6 +47,18 @@ static TextLayer *s_dash_dist_title_layer;
 static TextLayer *s_dash_dist_val_layer;
 static TextLayer *s_dash_coords_title_layer;
 static TextLayer *s_dash_coords_val_layer;
+static TextLayer *s_dash_alt_title_layer;
+static TextLayer *s_dash_alt_val_layer;
+static TextLayer *s_dash_time_title_layer;
+static TextLayer *s_dash_time_val_layer;
+static TextLayer *s_dash_duration_title_layer;
+static TextLayer *s_dash_duration_val_layer;
+static TextLayer *s_dash_heading_title_layer;
+static TextLayer *s_dash_heading_val_layer;
+static TextLayer *s_dash_battery_title_layer;
+static TextLayer *s_dash_battery_val_layer;
+static TextLayer *s_dash_dist_dest_title_layer;
+static TextLayer *s_dash_dist_dest_val_layer;
 
 // State Variables
 static bool s_show_dashboard = false;
@@ -58,13 +70,15 @@ static int s_nav_bearing = -1; // -1 = no instruction, 0 = straight, 90 = right,
 static bool s_is_english = false;
 static void update_ui_languages(void);
 static void layout_dashboard(void);
+static void update_time_and_duration(void);
 
 // Fullscreen setting and dynamic map dimensions
 static uint16_t s_current_map_width = MAP_WIDTH;
 static uint16_t s_current_map_height = MAP_HEIGHT;
 static uint32_t s_current_map_buffer_size = MAP_WIDTH * MAP_HEIGHT;
 static bool s_fullscreen_mode = false;
-static uint8_t s_dashboard_fields = 31;
+static uint16_t s_dashboard_fields = 31;
+static time_t s_activity_start_time = 0;
 #define MAX_ROUTES 15
 static uint32_t s_route_ids[MAX_ROUTES];
 static char s_route_names[MAX_ROUTES][32];
@@ -173,10 +187,16 @@ static uint32_t s_expected_chunks = 0;
 static char s_distance_text[16] = "---";
 static char s_instruction_text[64] = "Warte auf GPS...";
 static char s_avg_speed_text[16] = "0.0 km/h";
-static char s_elevation_gain_text[24] = "---m / ---m";
-static char s_elevation_loss_text[24] = "---m / ---m";
-static char s_trip_distance_text[16] = "--- / ---";
-static char s_coords_text[32] = "---, ---";
+static char s_elevation_gain_text[16] = "0m";
+static char s_elevation_loss_text[16] = "0m";
+static char s_trip_distance_text[16] = "0.00 km";
+static char s_coords_text[32] = "N/A, N/A";
+static char s_alt_text[16] = "---";
+static char s_time_text[16] = "---";
+static char s_duration_text[16] = "00:00:00";
+static char s_heading_text[16] = "---";
+static char s_battery_text[16] = "---";
+static char s_dist_dest_text[16] = "---";
 
 // Haptic feedback levels
 enum {
@@ -573,9 +593,15 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 
   // Handle text values
   Tuple *dist_tuple = dict_find(iter, MESSAGE_KEY_NAV_DISTANCE);
-  if (dist_tuple && s_distance_layer) {
-    snprintf(s_distance_text, sizeof(s_distance_text), "%s", dist_tuple->value->cstring);
-    text_layer_set_text(s_distance_layer, s_distance_text);
+  if (dist_tuple) {
+    if (s_distance_layer) {
+      snprintf(s_distance_text, sizeof(s_distance_text), "%s", dist_tuple->value->cstring);
+      text_layer_set_text(s_distance_layer, s_distance_text);
+    }
+    if (s_dash_dist_dest_val_layer) {
+      snprintf(s_dist_dest_text, sizeof(s_dist_dest_text), "%s", dist_tuple->value->cstring);
+      text_layer_set_text(s_dash_dist_dest_val_layer, s_dist_dest_text);
+    }
   }
   
   Tuple *inst_tuple = dict_find(iter, MESSAGE_KEY_NAV_INSTRUCTION);
@@ -645,7 +671,15 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 
   Tuple *rec_tuple = dict_find(iter, MESSAGE_KEY_RECORDING_STATE);
   if (rec_tuple) {
-    s_recording_active = (rec_tuple->value->uint8 == 1);
+    bool new_state = (rec_tuple->value->uint8 == 1);
+    if (!s_recording_active && new_state) {
+      s_activity_start_time = time(NULL);
+    }
+    s_recording_active = new_state;
+    if (!s_recording_active) {
+      s_activity_start_time = 0;
+    }
+    update_time_and_duration();
     if (s_header_layer) {
       layer_mark_dirty(s_header_layer);
     }
@@ -741,6 +775,20 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     text_layer_set_text(s_dash_coords_val_layer, s_coords_text);
   }
   
+  Tuple *alt_tuple = dict_find(iter, MESSAGE_KEY_GPS_ALT_STR);
+  if (alt_tuple && s_dash_alt_val_layer) {
+    snprintf(s_alt_text, sizeof(s_alt_text), "%s", alt_tuple->value->cstring);
+    text_layer_set_text(s_dash_alt_val_layer, s_alt_text);
+  }
+  
+  Tuple *heading_str_tuple = dict_find(iter, MESSAGE_KEY_HEADING_STR);
+  if (heading_str_tuple && s_dash_heading_val_layer) {
+    snprintf(s_heading_text, sizeof(s_heading_text), "%s", heading_str_tuple->value->cstring);
+    text_layer_set_text(s_dash_heading_val_layer, s_heading_text);
+  }
+  
+
+  
   // Check for Haptic/Vibe signal
   Tuple *vibe_tuple = dict_find(iter, MESSAGE_KEY_VIBRATE_ALERT);
   if (vibe_tuple) {
@@ -808,7 +856,25 @@ static void update_ui_languages() {
     text_layer_set_text(s_dash_loss_title_layer, s_is_english ? "ELEV LOSS" : "HM ABSTIEG");
   }
   if (s_dash_coords_title_layer) {
-    text_layer_set_text(s_dash_coords_title_layer, s_is_english ? "GPS COORDS (SELECT: MENU)" : "GPS KOORDINATEN (SELECT: MENÜ)");
+    text_layer_set_text(s_dash_coords_title_layer, s_is_english ? "GPS COORDS" : "GPS KOORDINATEN");
+  }
+  if (s_dash_alt_title_layer) {
+    text_layer_set_text(s_dash_alt_title_layer, s_is_english ? "ALTITUDE" : "AKTUELLE HÖHE");
+  }
+  if (s_dash_time_title_layer) {
+    text_layer_set_text(s_dash_time_title_layer, s_is_english ? "TIME" : "UHRZEIT");
+  }
+  if (s_dash_duration_title_layer) {
+    text_layer_set_text(s_dash_duration_title_layer, s_is_english ? "DURATION" : "DAUER");
+  }
+  if (s_dash_heading_title_layer) {
+    text_layer_set_text(s_dash_heading_title_layer, s_is_english ? "HEADING" : "RICHTUNG");
+  }
+  if (s_dash_battery_title_layer) {
+    text_layer_set_text(s_dash_battery_title_layer, s_is_english ? "BATTERY" : "AKKUSTAND");
+  }
+  if (s_dash_dist_dest_title_layer) {
+    text_layer_set_text(s_dash_dist_dest_title_layer, s_is_english ? "DIST TO DEST" : "DISTANZ ZUM ZIEL");
   }
   if (s_instruction_layer) {
     const char *curr_text = text_layer_get_text(s_instruction_layer);
@@ -829,32 +895,58 @@ static void layout_dashboard(void) {
   
   int dash_h = bounds.size.h - HEADER_HEIGHT;
   
-  bool active[5] = {
+  // Coordinates are always visible at the bottom (reserve ~30px)
+  int coords_h = 30;
+  int dynamic_h = dash_h - coords_h;
+  
+  // Optional fields
+  bool active[10] = {
     (s_dashboard_fields & 1) != 0,
     (s_dashboard_fields & 2) != 0,
     (s_dashboard_fields & 4) != 0,
     (s_dashboard_fields & 8) != 0,
-    (s_dashboard_fields & 16) != 0
+    (s_dashboard_fields & 16) != 0,
+    (s_dashboard_fields & 32) != 0,
+    (s_dashboard_fields & 64) != 0,
+    (s_dashboard_fields & 128) != 0,
+    (s_dashboard_fields & 256) != 0,
+    (s_dashboard_fields & 512) != 0
   };
   
-  TextLayer* t_layers[5] = { s_dash_avg_speed_title_layer, s_dash_dist_title_layer, s_dash_gain_title_layer, s_dash_loss_title_layer, s_dash_coords_title_layer };
-  TextLayer* v_layers[5] = { s_dash_avg_speed_val_layer, s_dash_dist_val_layer, s_dash_gain_val_layer, s_dash_loss_val_layer, s_dash_coords_val_layer };
+  TextLayer* t_layers[10] = { 
+    s_dash_avg_speed_title_layer, s_dash_dist_title_layer, s_dash_gain_title_layer, s_dash_loss_title_layer,
+    s_dash_alt_title_layer, s_dash_time_title_layer, s_dash_duration_title_layer, s_dash_heading_title_layer,
+    s_dash_battery_title_layer, s_dash_dist_dest_title_layer
+  };
+  TextLayer* v_layers[10] = { 
+    s_dash_avg_speed_val_layer, s_dash_dist_val_layer, s_dash_gain_val_layer, s_dash_loss_val_layer,
+    s_dash_alt_val_layer, s_dash_time_val_layer, s_dash_duration_val_layer, s_dash_heading_val_layer,
+    s_dash_battery_val_layer, s_dash_dist_dest_val_layer
+  };
   
   int active_count = 0;
-  for(int i = 0; i < 5; i++) {
+  for(int i = 0; i < 10; i++) {
     layer_set_hidden(text_layer_get_layer(t_layers[i]), !active[i]);
     layer_set_hidden(text_layer_get_layer(v_layers[i]), !active[i]);
     if(active[i]) active_count++;
   }
+  
+  // Layout coords at the bottom
+  layer_set_hidden(text_layer_get_layer(s_dash_coords_title_layer), false);
+  layer_set_hidden(text_layer_get_layer(s_dash_coords_val_layer), false);
+  
+  int coords_y = dynamic_h;
+  layer_set_frame(text_layer_get_layer(s_dash_coords_title_layer), GRect(5, coords_y, bounds.size.w - 10, 14));
+  layer_set_frame(text_layer_get_layer(s_dash_coords_val_layer), GRect(5, coords_y + 12, bounds.size.w - 10, 18));
+  text_layer_set_font(s_dash_coords_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
 
   if (active_count == 0) return;
   
   int rows = 1, cols = 1;
   if (active_count == 2) { rows = 2; cols = 1; }
   else if (active_count == 3 || active_count == 4) { rows = 2; cols = 2; }
-  else if (active_count == 5) { rows = 3; cols = 2; }
   
-  int row_h = dash_h / rows;
+  int row_h = dynamic_h / rows;
   int col_w = (bounds.size.w - 15) / cols;
   
   const char* val_font = FONT_KEY_GOTHIC_24_BOLD;
@@ -863,7 +955,7 @@ static void layout_dashboard(void) {
   else if (rows == 2) val_font = FONT_KEY_GOTHIC_28_BOLD;
 
   int current_idx = 0;
-  for(int i = 0; i < 5; i++) {
+  for(int i = 0; i < 10; i++) {
     if(!active[i]) continue;
     
     int r = current_idx / cols;
@@ -873,23 +965,11 @@ static void layout_dashboard(void) {
     int w = col_w;
     int y = r * row_h;
     
-    if (active_count == 5 && i == 4) {
-      x = 10;
-      w = bounds.size.w - 20;
-    }
-    
     layer_set_frame(text_layer_get_layer(t_layers[i]), GRect(x, y + 2, w, 14));
     layer_set_frame(text_layer_get_layer(v_layers[i]), GRect(x, y + 16, w, row_h - 18));
+    text_layer_set_font(v_layers[i], fonts_get_system_font(val_font));
     
-    if (active_count == 5 && i == 4) {
-      text_layer_set_font(v_layers[i], fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-    } else {
-      text_layer_set_font(v_layers[i], fonts_get_system_font(val_font));
-    }
-    
-    if (!(active_count == 5 && i == 4)) {
-      current_idx++;
-    }
+    current_idx++;
   }
 }
 
@@ -1023,6 +1103,96 @@ static void main_window_load(Window *window) {
   text_layer_set_text_alignment(s_dash_coords_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_coords_val_layer, s_coords_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_coords_val_layer));
+
+  s_dash_alt_title_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_alt_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_alt_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_alt_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_dash_alt_title_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_alt_title_layer, "AKTUELLE HÖHE");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_alt_title_layer));
+  
+  s_dash_alt_val_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_alt_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_alt_val_layer, GColorBlack);
+  text_layer_set_text_alignment(s_dash_alt_val_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_alt_val_layer, s_alt_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_alt_val_layer));
+
+  s_dash_time_title_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_time_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_time_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_time_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_dash_time_title_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_time_title_layer, "UHRZEIT");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_time_title_layer));
+  
+  s_dash_time_val_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_time_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_time_val_layer, GColorBlack);
+  text_layer_set_text_alignment(s_dash_time_val_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_time_val_layer, s_time_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_time_val_layer));
+
+  s_dash_duration_title_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_duration_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_duration_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_duration_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_dash_duration_title_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_duration_title_layer, "DAUER");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_duration_title_layer));
+  
+  s_dash_duration_val_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_duration_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_duration_val_layer, GColorBlack);
+  text_layer_set_text_alignment(s_dash_duration_val_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_duration_val_layer, s_duration_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_duration_val_layer));
+
+  s_dash_heading_title_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_heading_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_heading_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_heading_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_dash_heading_title_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_heading_title_layer, "RICHTUNG");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_heading_title_layer));
+  
+  s_dash_heading_val_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_heading_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_heading_val_layer, GColorBlack);
+  text_layer_set_text_alignment(s_dash_heading_val_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_heading_val_layer, s_heading_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_heading_val_layer));
+
+  s_dash_battery_title_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_battery_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_battery_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_battery_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_dash_battery_title_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_battery_title_layer, "AKKUSTAND");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_battery_title_layer));
+  
+  s_dash_battery_val_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_battery_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_battery_val_layer, GColorBlack);
+  text_layer_set_text_alignment(s_dash_battery_val_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_battery_val_layer, s_battery_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_battery_val_layer));
+
+  s_dash_dist_dest_title_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_dist_dest_title_layer, GColorClear);
+  text_layer_set_text_color(s_dash_dist_dest_title_layer, GColorDarkGray);
+  text_layer_set_font(s_dash_dist_dest_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_text_alignment(s_dash_dist_dest_title_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_dist_dest_title_layer, "DISTANZ ZUM ZIEL");
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_dest_title_layer));
+  
+  s_dash_dist_dest_val_layer = text_layer_create(GRectZero);
+  text_layer_set_background_color(s_dash_dist_dest_val_layer, GColorClear);
+  text_layer_set_text_color(s_dash_dist_dest_val_layer, GColorBlack);
+  text_layer_set_text_alignment(s_dash_dist_dest_val_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_dash_dist_dest_val_layer, s_dist_dest_text);
+  layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_dest_val_layer));
   
   update_ui_languages();
   layout_dashboard();
@@ -1081,13 +1251,61 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_dash_dist_val_layer);
   text_layer_destroy(s_dash_coords_title_layer);
   text_layer_destroy(s_dash_coords_val_layer);
+  text_layer_destroy(s_dash_alt_title_layer);
+  text_layer_destroy(s_dash_alt_val_layer);
+  text_layer_destroy(s_dash_time_title_layer);
+  text_layer_destroy(s_dash_time_val_layer);
+  text_layer_destroy(s_dash_duration_title_layer);
+  text_layer_destroy(s_dash_duration_val_layer);
+  text_layer_destroy(s_dash_heading_title_layer);
+  text_layer_destroy(s_dash_heading_val_layer);
+  text_layer_destroy(s_dash_battery_title_layer);
+  text_layer_destroy(s_dash_battery_val_layer);
+  text_layer_destroy(s_dash_dist_dest_title_layer);
+  text_layer_destroy(s_dash_dist_dest_val_layer);
   layer_destroy(s_dashboard_layer);
 }
 
 static void battery_state_handler(BatteryChargeState charge) {
+  snprintf(s_battery_text, sizeof(s_battery_text), "%d%%", charge.charge_percent);
+  if (s_dash_battery_val_layer && !layer_get_hidden(text_layer_get_layer(s_dash_battery_val_layer))) {
+    text_layer_set_text(s_dash_battery_val_layer, s_battery_text);
+  }
   if (s_header_layer) {
     layer_mark_dirty(s_header_layer);
   }
+}
+
+static void update_time_and_duration() {
+  time_t now = time(NULL);
+  struct tm *t = localtime(&now);
+  
+  if (clock_is_24h_style()) {
+    strftime(s_time_text, sizeof(s_time_text), "%H:%M", t);
+  } else {
+    strftime(s_time_text, sizeof(s_time_text), "%I:%M %p", t);
+  }
+  
+  if (s_dash_time_val_layer && !layer_get_hidden(text_layer_get_layer(s_dash_time_val_layer))) {
+    text_layer_set_text(s_dash_time_val_layer, s_time_text);
+  }
+  
+  if (s_activity_start_time > 0 && s_recording_active) {
+    long elapsed = (long)(now - s_activity_start_time);
+    int h = elapsed / 3600;
+    int m = (elapsed % 3600) / 60;
+    snprintf(s_duration_text, sizeof(s_duration_text), "%d:%02d", h, m);
+  } else {
+    snprintf(s_duration_text, sizeof(s_duration_text), "0:00");
+  }
+  
+  if (s_dash_duration_val_layer && !layer_get_hidden(text_layer_get_layer(s_dash_duration_val_layer))) {
+    text_layer_set_text(s_dash_duration_val_layer, s_duration_text);
+  }
+}
+
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  update_time_and_duration();
 }
 
 static void compass_heading_handler(CompassHeadingData heading) {
@@ -1313,6 +1531,11 @@ static void init() {
   
   // Register battery state service
   battery_state_service_subscribe(battery_state_handler);
+  battery_state_handler(battery_state_service_peek()); // Initial call
+  
+  // Register tick timer
+  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
+  update_time_and_duration(); // Initial call
   
   // Subscribe to compass service
   compass_service_subscribe(compass_heading_handler);
@@ -1323,6 +1546,7 @@ static void init() {
 
 // App Deinitialization
 static void deinit() {
+  tick_timer_service_unsubscribe();
   compass_service_unsubscribe();
   battery_state_service_unsubscribe();
   window_destroy(s_main_window);
