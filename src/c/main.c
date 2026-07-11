@@ -440,7 +440,7 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   if (active_count == 2) { rows = 2; cols = 1; }
   else if (active_count == 3 || active_count == 4) { rows = 2; cols = 2; }
   
-  int coords_h = 30;
+  int coords_h = 36;
   int dynamic_h = bounds.size.h - coords_h;
   int row_h = dynamic_h / rows;
   
@@ -906,7 +906,7 @@ static void layout_dashboard(void) {
   int dash_h = bounds.size.h - HEADER_HEIGHT;
   
   // Coordinates are always visible at the bottom (reserve ~30px)
-  int coords_h = 30;
+  int coords_h = 36;
   int dynamic_h = dash_h - coords_h;
   
   // Optional fields
@@ -960,8 +960,7 @@ static void layout_dashboard(void) {
   int col_w = bounds.size.w / cols;
   
   const char* val_font = FONT_KEY_GOTHIC_24_BOLD;
-  if (rows == 1) val_font = FONT_KEY_BITHAM_42_BOLD;
-  else if (rows == 2 && cols == 1) val_font = FONT_KEY_BITHAM_34_MEDIUM_NUMBERS;
+  if (rows == 1 || cols == 1) val_font = FONT_KEY_GOTHIC_28_BOLD;
   else if (rows == 2) val_font = FONT_KEY_GOTHIC_28_BOLD;
 
   int current_idx = 0;
