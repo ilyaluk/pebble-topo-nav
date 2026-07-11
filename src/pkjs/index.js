@@ -257,9 +257,9 @@ function openConfigPage() {
             '&nav_view_mode=' + (localStorage.getItem('navViewMode') || '0') +
             '&dashboard_fields=' + (localStorage.getItem('dashboardFields') || '31') + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
-            '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
             '&routes=' + encodeURIComponent(JSON.stringify(routesMeta)) +
-            '&active_route_id=' + (localStorage.getItem('activeRouteId') || '0');
+            '&active_route_id=' + (localStorage.getItem('activeRouteId') || '0') +
+            '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta));
             
   console.log('Opening config page with url: ' + url.substring(0, 150) + '... Length: ' + url.length);
   Pebble.openURL(url);
