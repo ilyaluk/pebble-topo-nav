@@ -254,7 +254,7 @@ function openConfigPage() {
             '&map=' + mapSource + 
             '&fullscreen=' + fullscreen + 
             '&show_breadcrumbs=' + showBreadcrumbs + 
-            '&auto_nav_popup=' + (localStorage.getItem('autoNavPopup') || 'true') +
+            '&nav_view_mode=' + (localStorage.getItem('navViewMode') || '0') +
             '&dashboard_fields=' + (localStorage.getItem('dashboardFields') || '31') + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
             '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
@@ -634,8 +634,8 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var dashboardFields = settings.dashboardFields !== undefined ? settings.dashboardFields : 31;
       localStorage.setItem('dashboardFields', dashboardFields.toString());
 
-      var autoNavPopup = settings.autoNavPopup !== undefined ? settings.autoNavPopup : true;
-      localStorage.setItem('autoNavPopup', autoNavPopup ? 'true' : 'false');
+      var navViewMode = settings.navViewMode !== undefined ? settings.navViewMode : 0;
+      localStorage.setItem('navViewMode', navViewMode.toString());
 
       if (showBreadcrumbs !== oldShowBreadcrumbs) {
         console.log('Show breadcrumbs setting changed from ' + oldShowBreadcrumbs + ' to ' + showBreadcrumbs);
@@ -843,7 +843,8 @@ function onGPSError(err) {
     NAV_DISTANCE: '---',
     LANGUAGE: isEnglish ? 1 : 0,
     FULLSCREEN_MODE: fullscreenMode,
-    DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10)
+    DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10),
+    NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10)
   });
 }
 
@@ -860,7 +861,8 @@ function updateWatchNavigationAndMap() {
       RECORDING_STATE: isNavigating ? 1 : 0,
       ACTIVE_ROUTE_ID: activeRouteId,
       FULLSCREEN_MODE: fullscreenMode,
-      DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10)
+      DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10),
+      NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10)
     });
     return;
   }
@@ -876,7 +878,8 @@ function updateWatchNavigationAndMap() {
     GPS_HEADING: Math.round(currentHeading),
     ACTIVE_ROUTE_ID: activeRouteId,
     FULLSCREEN_MODE: fullscreenMode,
-    DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10)
+    DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10),
+    NAV_VIEW_MODE: parseInt(localStorage.getItem('navViewMode') || '0', 10)
   };
 
   var offRoute = false;
@@ -1005,7 +1008,7 @@ function updateWatchNavigationAndMap() {
             vibrateAlert = turnBearingDiff > 0 ? 3 : 1; // 3 = Right, 1 = Left
             lastVibratedTurnIdx = turnIdx;
           }
-          if (localStorage.getItem('autoNavPopup') !== 'false') {
+          if (localStorage.getItem('navViewMode') !== '1') { // 1 = Map Only, so 0 and 2 will show popup
             payload.NAV_POPUP_STATE = 1;
           } else {
             payload.NAV_POPUP_STATE = 0;

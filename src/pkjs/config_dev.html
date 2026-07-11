@@ -267,10 +267,11 @@
       <option value="false">Aus / Off</option>
     </select>
 
-    <label for="auto-nav-popup" id="label-auto-nav-popup" style="margin-top: 15px;">Auto-Popup Navigation (< 50m)</label>
-    <select id="auto-nav-popup">
-      <option value="true" selected>An / On</option>
-      <option value="false">Aus / Off</option>
+    <label for="nav-view-mode" id="label-nav-view-mode" style="margin-top: 15px;">Navigations-Ansicht</label>
+    <select id="nav-view-mode">
+      <option value="0" selected>Karte + Auto-Popup</option>
+      <option value="1">Nur Karte (Kein Popup)</option>
+      <option value="2">Nur Pfeil (Dauerhaft)</option>
     </select>
 
     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
@@ -417,7 +418,10 @@
       fullscreenOn: "An (Keine Header/Footer)",
       fullscreenOff: "Aus (Standardlayout)",
       breadcrumbsLabel: "Zurückgelegte Route anzeigen",
-      autoNavPopupLabel: "Auto-Popup Navigation (< 50m)",
+      navViewModeLabel: "Navigations-Ansicht",
+      navViewMode0: "Karte + Auto-Popup",
+      navViewMode1: "Nur Karte (Kein Popup)",
+      navViewMode2: "Nur Pfeil (Dauerhaft)",
       breadcrumbsOn: "An",
       breadcrumbsOff: "Aus",
       btnView: "Ansehen",
@@ -477,7 +481,10 @@
       fullscreenOn: "On (No Header/Footer)",
       fullscreenOff: "Off (Standard Layout)",
       breadcrumbsLabel: "Show Traveled Route",
-      autoNavPopupLabel: "Auto-Popup Navigation (< 50m)",
+      navViewModeLabel: "Navigation View Mode",
+      navViewMode0: "Map + Auto-Popup",
+      navViewMode1: "Map Only (No Popup)",
+      navViewMode2: "Arrow Only (Permanent)",
       breadcrumbsOn: "On",
       breadcrumbsOff: "Off",
       btnView: "View",
@@ -508,7 +515,7 @@
     var mapSourceIdx = document.getElementById("map-source").selectedIndex;
     var fullscreenIdx = document.getElementById("fullscreen-map").selectedIndex;
     var showBreadcrumbsIdx = document.getElementById("show-breadcrumbs").selectedIndex;
-    var autoNavPopupIdx = document.getElementById("auto-nav-popup").selectedIndex;
+    var navViewModeIdx = document.getElementById("nav-view-mode").selectedIndex;
     
     document.getElementById("page-title").innerText = t.title;
     document.getElementById("card-general").innerText = t.general;
@@ -538,7 +545,11 @@
     breadcrumbsSelect.options[0].text = t.breadcrumbsOn;
     breadcrumbsSelect.options[1].text = t.breadcrumbsOff;
     
-    document.getElementById("label-auto-nav-popup").innerText = t.autoNavPopupLabel;
+    document.getElementById("label-nav-view-mode").innerText = t.navViewModeLabel;
+    var navViewSelect = document.getElementById("nav-view-mode");
+    navViewSelect.options[0].text = t.navViewMode0;
+    navViewSelect.options[1].text = t.navViewMode1;
+    navViewSelect.options[2].text = t.navViewMode2;
     
     document.getElementById("label-dashboard-fields").innerText = t.dashboardFieldsLabel;
     document.getElementById("label-field-speed").innerText = t.fieldSpeed;
@@ -552,7 +563,7 @@
     document.getElementById("map-source").selectedIndex = mapSourceIdx;
     document.getElementById("fullscreen-map").selectedIndex = fullscreenIdx;
     document.getElementById("show-breadcrumbs").selectedIndex = showBreadcrumbsIdx;
-    document.getElementById("auto-nav-popup").selectedIndex = autoNavPopupIdx;
+    document.getElementById("nav-view-mode").selectedIndex = navViewModeIdx;
     
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-b").innerText = t.methodB;
@@ -815,7 +826,7 @@
     var mapSource = document.getElementById("map-source").value;
     var fullscreen = document.getElementById("fullscreen-map").value === "true";
     var showBreadcrumbs = document.getElementById("show-breadcrumbs").value === "true";
-    var autoNavPopup = document.getElementById("auto-nav-popup").value === "true";
+    var navViewMode = parseInt(document.getElementById("nav-view-mode").value, 10);
     
     var dashboardFields = 0;
     if (document.getElementById("field-speed").checked) dashboardFields |= 1;
@@ -830,7 +841,7 @@
       mapSource: mapSource,
       fullscreen: fullscreen,
       showBreadcrumbs: showBreadcrumbs,
-      autoNavPopup: autoNavPopup,
+      navViewMode: navViewMode,
       dashboardFields: dashboardFields
     };
     
@@ -879,7 +890,7 @@
   setSelectByValue("map-source", getQueryParam("map"));
   setSelectByValue("fullscreen-map", getQueryParam("fullscreen"));
   setSelectByValue("show-breadcrumbs", getQueryParam("show_breadcrumbs"));
-  setSelectByValue("auto-nav-popup", getQueryParam("auto_nav_popup"));
+  setSelectByValue("nav-view-mode", getQueryParam("nav_view_mode"));
   
   var dbFieldsParam = getQueryParam("dashboard_fields");
   var dbFields = dbFieldsParam ? parseInt(dbFieldsParam, 10) : 31;

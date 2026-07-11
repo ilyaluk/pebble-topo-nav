@@ -116,6 +116,7 @@ static const GPathInfo BIG_ARROW_PATH_INFO = {
 static GPath *s_big_arrow_path = NULL;
 static Layer *s_big_nav_layer = NULL;
 static bool s_big_nav_active = false;
+static uint8_t s_nav_view_mode = 0; // 0 = Map+Popup, 1 = Map Only, 2 = Arrow Only
 
 
 static void set_map_dimensions(int width, int height) {
@@ -358,6 +359,10 @@ static int get_current_bearing() {
 static void map_layer_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
+  if (s_nav_view_mode == 2) {
+    return; // Do not draw map in Arrow Only mode to save battery
+  }
+
   if (s_map_ready && s_map_bitmap) {
     graphics_draw_bitmap_in_rect(ctx, s_map_bitmap, bounds);
     
@@ -528,6 +533,14 @@ static void big_nav_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   
+  if (s_active_route_id == 0) {
+    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_draw_text(ctx, "Keine Route aktiv", fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
+                       GRect(0, bounds.size.h / 2 - 20, bounds.size.w, 40),
+                       GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+    return;
+  }
+  
   // Draw Arrow
   if (s_big_arrow_path) {
     int32_t angle = (s_nav_bearing * TRIG_MAX_ANGLE) / 360;
@@ -590,16 +603,33 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     }
   }
 
+  Tuple *nav_view_mode_tuple = dict_find(iter, MESSAGE_KEY_NAV_VIEW_MODE);
+  if (nav_view_mode_tuple) {
+    s_nav_view_mode = nav_view_mode_tuple->value->uint8;
+  }
+
   Tuple *popup_tuple = dict_find(iter, MESSAGE_KEY_NAV_POPUP_STATE);
-  if (popup_tuple) {
-    bool should_popup = (popup_tuple->value->uint8 == 1);
+  if (popup_tuple || nav_view_mode_tuple) {
+    bool should_popup = false;
+    if (s_nav_view_mode == 2) {
+      should_popup = true;
+    } else if (s_nav_view_mode == 1) {
+      should_popup = false;
+    } else if (popup_tuple) {
+      should_popup = (popup_tuple->value->uint8 == 1);
+    } else {
+      should_popup = s_big_nav_active;
+    }
+    
     if (should_popup != s_big_nav_active) {
       s_big_nav_active = should_popup;
       if (s_big_nav_layer) {
         layer_set_hidden(s_big_nav_layer, !s_big_nav_active);
         if (s_big_nav_active) {
           layer_mark_dirty(s_big_nav_layer);
-          vibes_short_pulse(); // Vibrate when auto-popup appears
+          if (s_nav_view_mode != 2) {
+            vibes_short_pulse(); // Vibrate when auto-popup appears, but not if it's permanently on
+          }
         }
       }
     }
