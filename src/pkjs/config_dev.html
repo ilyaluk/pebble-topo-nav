@@ -504,11 +504,11 @@
     var t = translations[lang] || translations.de;
     
     // Save current values to prevent resets in some WebView engines when updating options
-    var gpsIntervalVal = document.getElementById("gps-interval").value;
-    var mapSourceVal = document.getElementById("map-source").value;
-    var fullscreenVal = document.getElementById("fullscreen-map").value;
-    var showBreadcrumbsVal = document.getElementById("show-breadcrumbs").value;
-    var autoNavPopupVal = document.getElementById("auto-nav-popup").value;
+    var gpsIntervalIdx = document.getElementById("gps-interval").selectedIndex;
+    var mapSourceIdx = document.getElementById("map-source").selectedIndex;
+    var fullscreenIdx = document.getElementById("fullscreen-map").selectedIndex;
+    var showBreadcrumbsIdx = document.getElementById("show-breadcrumbs").selectedIndex;
+    var autoNavPopupIdx = document.getElementById("auto-nav-popup").selectedIndex;
     
     document.getElementById("page-title").innerText = t.title;
     document.getElementById("card-general").innerText = t.general;
@@ -547,12 +547,12 @@
     document.getElementById("label-field-loss").innerText = t.fieldLoss;
     document.getElementById("label-field-coords").innerText = t.fieldCoords;
     
-    // Restore saved values
-    document.getElementById("gps-interval").value = gpsIntervalVal;
-    document.getElementById("map-source").value = mapSourceVal;
-    document.getElementById("fullscreen-map").value = fullscreenVal;
-    document.getElementById("show-breadcrumbs").value = showBreadcrumbsVal;
-    document.getElementById("auto-nav-popup").value = autoNavPopupVal;
+    // Restore saved values using selectedIndex (more reliable in older WebViews)
+    document.getElementById("gps-interval").selectedIndex = gpsIntervalIdx;
+    document.getElementById("map-source").selectedIndex = mapSourceIdx;
+    document.getElementById("fullscreen-map").selectedIndex = fullscreenIdx;
+    document.getElementById("show-breadcrumbs").selectedIndex = showBreadcrumbsIdx;
+    document.getElementById("auto-nav-popup").selectedIndex = autoNavPopupIdx;
     
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-b").innerText = t.methodB;
@@ -863,35 +863,23 @@
     return null;
   }
   
-  var initialInterval = getQueryParam("interval");
-  if (initialInterval) {
-    document.getElementById("gps-interval").value = initialInterval;
+  function setSelectByValue(selectId, value) {
+    if (!value) return;
+    var sel = document.getElementById(selectId);
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === value) {
+        sel.selectedIndex = i;
+        break;
+      }
+    }
   }
-  
-  var initialLang = getQueryParam("lang");
-  if (initialLang) {
-    document.getElementById("app-lang").value = initialLang;
-  }
-  
-  var initialMap = getQueryParam("map");
-  if (initialMap) {
-    document.getElementById("map-source").value = initialMap;
-  }
-  
-  var initialFullscreen = getQueryParam("fullscreen");
-  if (initialFullscreen) {
-    document.getElementById("fullscreen-map").value = initialFullscreen;
-  }
-  
-  var initialBreadcrumbs = getQueryParam("show_breadcrumbs");
-  if (initialBreadcrumbs) {
-    document.getElementById("show-breadcrumbs").value = initialBreadcrumbs;
-  }
-  
-  var initialAutoNavPopup = getQueryParam("auto_nav_popup");
-  if (initialAutoNavPopup) {
-    document.getElementById("auto-nav-popup").value = initialAutoNavPopup;
-  }
+
+  setSelectByValue("gps-interval", getQueryParam("interval"));
+  setSelectByValue("app-lang", getQueryParam("lang"));
+  setSelectByValue("map-source", getQueryParam("map"));
+  setSelectByValue("fullscreen-map", getQueryParam("fullscreen"));
+  setSelectByValue("show-breadcrumbs", getQueryParam("show_breadcrumbs"));
+  setSelectByValue("auto-nav-popup", getQueryParam("auto_nav_popup"));
   
   var dbFieldsParam = getQueryParam("dashboard_fields");
   var dbFields = dbFieldsParam ? parseInt(dbFieldsParam, 10) : 31;
