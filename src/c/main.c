@@ -180,8 +180,15 @@ static char s_coords_text[32] = "---, ---";
 // Haptic feedback levels
 enum {
   VIBE_ALERT_NONE = 0,
-  VIBE_ALERT_TURN = 1,
-  VIBE_ALERT_OFF_ROUTE = 2
+  VIBE_ALERT_TURN_LEFT = 1,
+  VIBE_ALERT_OFF_ROUTE = 2,
+  VIBE_ALERT_TURN_RIGHT = 3
+};
+
+static const uint32_t s_off_route_segments[] = { 100, 100, 100, 100, 100 };
+static const VibePattern s_off_route_pattern = {
+  .durations = s_off_route_segments,
+  .num_segments = ARRAY_LENGTH(s_off_route_segments),
 };
 
 // Send zoom change to the phone JS companion
@@ -691,10 +698,12 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *vibe_tuple = dict_find(iter, MESSAGE_KEY_VIBRATE_ALERT);
   if (vibe_tuple) {
     uint8_t alert_type = vibe_tuple->value->uint8;
-    if (alert_type == VIBE_ALERT_TURN) {
-      vibes_short_pulse();
+    if (alert_type == VIBE_ALERT_TURN_LEFT) {
+      vibes_double_pulse(); // 2 short pulses for left
+    } else if (alert_type == VIBE_ALERT_TURN_RIGHT) {
+      vibes_long_pulse(); // 1 long pulse for right
     } else if (alert_type == VIBE_ALERT_OFF_ROUTE) {
-      vibes_double_pulse();
+      vibes_enqueue_custom_pattern(s_off_route_pattern); // 3 rapid pulses for off route
     }
   }
 

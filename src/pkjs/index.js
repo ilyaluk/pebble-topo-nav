@@ -1002,7 +1002,7 @@ function updateWatchNavigationAndMap() {
         // Trigger turn haptic vibration at ~50 meters (only once per turn)
         if (distToTurn <= 50) {
           if (lastVibratedTurnIdx !== turnIdx) {
-            vibrateAlert = 1; // Turn alert
+            vibrateAlert = turnBearingDiff > 0 ? 3 : 1; // 3 = Right, 1 = Left
             lastVibratedTurnIdx = turnIdx;
           }
           if (localStorage.getItem('autoNavPopup') !== 'false') {

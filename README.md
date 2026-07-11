@@ -26,7 +26,7 @@ TopoNav brings full topographic map navigation, GPX route guidance, and workout 
   * **Navigation Dashboard:** Toggleable dashboard view providing metrics like average speed, trip distance, elevation gain/loss, and exact coordinates.
   * **Big Navigation View:** Auto-popup full-screen navigation arrow and distance when approaching a turn (< 50m). Can be toggled in settings.
   * **Offline Tracking:** Follow the GPX path visually without needing turn-by-turn prompts if desired. The watch dynamically calculates the grid layout and maximizes font sizes based on your active fields.
-* 🔊 **Turn-by-Turn & Off-Route Alerts**: Screen indications and distinct vibration patterns notify you when a turn is approaching or when you drift more than 50 meters off-route.
+* 🔊 **Turn-by-Turn & Off-Route Alerts**: Screen indications and distinct directional vibration patterns (e.g. double pulse for left, long pulse for right) notify you when a turn is approaching or when you drift more than 50 meters off-route.
 * 🔋 **High Contrast & Battery Indicator**: Optimised high-contrast white header/footer layouts for excellent sunlight legibility, complete with watch battery level percentage.
 * 🌐 **Multilingual Support**: Fully translated into both **English** and **German**.
 

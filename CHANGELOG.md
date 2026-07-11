@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [2.6.0] - 2026-07-11
 
 ### Added
+- **US-2: Directional Vibration Patterns:** Added distinct vibration patterns for turns. A left turn triggers a double pulse, while a right turn triggers a single long pulse. Off-route alerts now trigger 3 rapid pulses.
 - **US-1: Big Navigation View**: Added an auto-popup full-screen navigation view that shows a large arrow and distance when approaching a turn (< 50m). Can be toggled in settings.
 - **US-3: Dynamic Grid Layout Architecture**: The dashboard is no longer a fixed layout. Users can now individually toggle data fields (Speed, Distance, Elevation Gain, Elevation Loss, Coordinates) via the settings. The watch automatically adjusts the grid layout and maximizes font sizes based on the number of active fields.
 
