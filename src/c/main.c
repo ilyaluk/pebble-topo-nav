@@ -530,11 +530,11 @@ static void big_nav_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
   // Fill background
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   
   if (s_active_route_id == 0) {
-    graphics_context_set_text_color(ctx, GColorWhite);
+    graphics_context_set_text_color(ctx, GColorBlack);
     graphics_draw_text(ctx, "Keine Route aktiv", fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
                        GRect(0, bounds.size.h / 2 - 20, bounds.size.w, 40),
                        GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
@@ -548,12 +548,12 @@ static void big_nav_update_proc(Layer *layer, GContext *ctx) {
     GPoint center = GPoint(bounds.size.w / 2, bounds.size.h / 2 - 20);
     gpath_move_to(s_big_arrow_path, center);
     
-    graphics_context_set_fill_color(ctx, GColorWhite);
+    graphics_context_set_fill_color(ctx, GColorBlack);
     gpath_draw_filled(ctx, s_big_arrow_path);
   }
   
   // Draw Distance Text
-  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_context_set_text_color(ctx, GColorBlack);
   graphics_draw_text(ctx, s_distance_text, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD),
                      GRect(0, bounds.size.h - 55, bounds.size.w, 50),
                      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
