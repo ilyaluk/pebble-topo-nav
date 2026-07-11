@@ -1,21 +1,14 @@
 # Changelog
 
-## [2.7.0] - 2026-07-11
-
-### Added
-- **US-5: Fully Dynamic Dashboard & New Metrics**: Expanded the dynamic grid engine to support a total of 10 different metrics (Average Speed, Distance, Elevation Gain, Elevation Loss, Coordinates, Battery Level, Duration, Current Altitude, Compass Heading, Distance to Destination). Users can select up to 4 optional fields to display alongside the fixed coordinates. Watch battery and duration are updated natively via Pebble background services.
-
-### Fixed
-- **US-9: Navigation Menu Logic in Arrow Mode**: Corrected the click handler logic when "Arrow Only" navigation view is enabled permanently. Pressing Select now properly overlays the Dashboard on top of the Arrow View, and pressing it again cycles to the Routes menu, correctly restoring the Arrow view when navigating back.
-- **US-5: Dashboard Grid Layout**: Fixed overlapping issues and font scaling on the dashboard. The coordinates layout properly claims bottom space without grid lines bleeding into it, and characters/units properly scale alongside numeric metrics instead of defaulting to tiny fallback system fonts.
-
 ## [2.6.0] - 2026-07-11
 
 ### Added
-- **US-4: Permanent Big Navigation View (Accessibility Mode):** The "Auto-Popup Navigation" setting has been replaced with a 3-way dropdown for "Navigation View". Users can now choose to permanently display the large arrow and distance (Arrow Only) instead of the map, ideal for quick reading during activities or for visual accessibility. The map drawing is completely bypassed in this mode to save battery.
-- **US-2: Directional Vibration Patterns:** Added distinct vibration patterns for turns. A left turn triggers a double pulse, while a right turn triggers a single long pulse. Off-route alerts now trigger 3 rapid pulses.
-- **US-1: Big Navigation View**: Added an auto-popup full-screen navigation view that shows a large arrow and distance when approaching a turn (< 50m). Can be toggled in settings.
-- **US-3: Dynamic Grid Layout Architecture**: The dashboard is no longer a fixed layout. Users can now individually toggle data fields (Speed, Distance, Elevation Gain, Elevation Loss, Coordinates) via the settings. The watch automatically adjusts the grid layout and maximizes font sizes based on the number of active fields.
+- **Navigation View Modes (Auto-Popup & Permanent Arrow):** Replaced the simple "Auto-Popup Navigation" setting with a 3-way dropdown for "Navigation View". Users can now choose to see the map, enable an auto-popup full-screen navigation view that shows a large arrow and distance when approaching a turn (< 50m), or permanently display the large arrow (Arrow Only) for quick reading and battery savings.
+- **Directional Vibration Patterns:** Added distinct vibration patterns for turns. A left turn triggers a double pulse, while a right turn triggers a single long pulse. Off-route alerts now trigger 3 rapid pulses.
+- **Fully Dynamic Dashboard & New Metrics:** Completely overhauled the dashboard grid architecture. Users can now select up to 4 optional fields from 10 different metrics (Speed, Average Speed, Distance, Elevation Gain/Loss, Duration, Altitude, Battery, Compass Heading, Distance to Destination) to display alongside fixed coordinates. The watch automatically adjusts grid layout and maximizes font sizes.
+
+### Fixed
+- **Navigation Menu Logic & Dashboard UI:** Fixed click handler logic so that pressing Select while the permanent "Arrow Only" mode is active correctly overlays the Dashboard, and pressing it again cycles to the Routes menu. Resolved overlapping issues and font scaling on the dashboard so characters and units scale alongside numeric metrics properly.
 
 ## [2.5.0] - 2026-06-14
 
