@@ -838,9 +838,7 @@
       delBtn.className = "trip-btn danger";
       delBtn.innerText = t.btnDelete;
       delBtn.addEventListener("click", function() {
-        if (confirm(lang === "de" ? "Diese Route wirklich löschen?" : "Really delete this route?")) {
-          window.location.href = "pebblejs://close#delete_route_" + route.id;
-        }
+        window.location.href = "pebblejs://close#delete_route_" + route.id;
       });
       
       actions.appendChild(delBtn);
@@ -1075,9 +1073,7 @@
       delBtn.className = "trip-btn danger";
       delBtn.innerText = t.btnDelete;
       delBtn.addEventListener("click", function() {
-        if (confirm(lang === "de" ? "Diese Tour wirklich löschen?" : "Really delete this trip?")) {
-          window.location.href = "pebblejs://close#delete_" + trip.id;
-        }
+        window.location.href = "pebblejs://close#delete_" + trip.id;
       });
       
       actions.appendChild(viewBtn);
