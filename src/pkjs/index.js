@@ -965,8 +965,8 @@ function updateWatchNavigationAndMap() {
       var distToTurn = 0;
       var turnBearingDiff = 0;
       
-      // Check next 20 trackpoints for bearing changes
-      var lookAheadLimit = Math.min(closestIdx + 20, gpxTrack.length - 2);
+      // Check all remaining trackpoints for bearing changes
+      var lookAheadLimit = gpxTrack.length - 2;
       for (var idx = closestIdx; idx < lookAheadLimit; idx++) {
         var b1 = getBearing(gpxTrack[idx].lat, gpxTrack[idx].lon, gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon);
         var b2 = getBearing(gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon, gpxTrack[idx + 2].lat, gpxTrack[idx + 2].lon);
@@ -980,14 +980,17 @@ function updateWatchNavigationAndMap() {
       }
       
       if (turnIdx !== -1) {
-        distToTurn = haversineDistance(
-          currentLocation.lat,
-          currentLocation.lon,
-          gpxTrack[turnIdx].lat,
-          gpxTrack[turnIdx].lon
-        );
+        // Accumulate distance along the path
+        distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon);
+        for (var i = closestIdx; i < turnIdx; i++) {
+           distToTurn += haversineDistance(gpxTrack[i].lat, gpxTrack[i].lon, gpxTrack[i+1].lat, gpxTrack[i+1].lon);
+        }
         
-        payload.NAV_DISTANCE = Math.round(distToTurn) + 'm';
+        if (distToTurn > 1000) {
+           payload.NAV_DISTANCE = (distToTurn / 1000).toFixed(1) + 'km';
+        } else {
+           payload.NAV_DISTANCE = Math.round(distToTurn) + 'm';
+        }
         
         // Formulate instruction text
         var dirText = '';
@@ -1017,8 +1020,19 @@ function updateWatchNavigationAndMap() {
           payload.NAV_POPUP_STATE = 0;
         }
       } else {
+        // No more sharp turns. Calculate distance to end of route.
+        distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon);
+        for (var j = closestIdx; j < gpxTrack.length - 1; j++) {
+           distToTurn += haversineDistance(gpxTrack[j].lat, gpxTrack[j].lon, gpxTrack[j+1].lat, gpxTrack[j+1].lon);
+        }
+        
+        if (distToTurn > 1000) {
+           payload.NAV_DISTANCE = (distToTurn / 1000).toFixed(1) + 'km';
+        } else {
+           payload.NAV_DISTANCE = Math.round(distToTurn) + 'm';
+        }
+
         payload.NAV_INSTRUCTION = isEnglish ? 'Follow the path' : 'Folge dem Weg';
-        payload.NAV_DISTANCE = '---';
         payload.NAV_BEARING = 0; // straight
         payload.NAV_POPUP_STATE = 0;
       }
