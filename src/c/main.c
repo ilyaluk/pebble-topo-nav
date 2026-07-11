@@ -491,6 +491,9 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (s_fullscreen_mode) {
       layer_set_hidden(s_header_layer, false); // Show header on dashboard even if fullscreen map is enabled
     }
+    if (s_big_nav_layer) {
+      layer_set_hidden(s_big_nav_layer, true); // Hide big nav layer when dashboard is open
+    }
   } else {
     // Open Route Selection Menu
     if (!s_menu_window) {
@@ -505,20 +508,23 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
-  if (s_big_nav_active) {
-    // Dismiss auto-popup manually
-    s_big_nav_active = false;
-    if (s_big_nav_layer) {
-      layer_set_hidden(s_big_nav_layer, true);
-    }
-  } else if (s_show_dashboard) {
-    // Return to map mode
+  if (s_show_dashboard) {
+    // Return to map mode (or big nav mode)
     s_show_dashboard = false;
     layer_set_hidden(s_map_layer, s_show_dashboard);
     layer_set_hidden(s_footer_layer, s_show_dashboard);
     layer_set_hidden(s_dashboard_layer, !s_show_dashboard);
     if (s_fullscreen_mode) {
       layer_set_hidden(s_header_layer, true); // Re-hide header on map in fullscreen mode
+    }
+    if (s_big_nav_layer) {
+      layer_set_hidden(s_big_nav_layer, !s_big_nav_active); // Restore big nav layer if it was active
+    }
+  } else if (s_big_nav_active && s_nav_view_mode != 2) {
+    // Dismiss auto-popup manually
+    s_big_nav_active = false;
+    if (s_big_nav_layer) {
+      layer_set_hidden(s_big_nav_layer, true);
     }
   } else {
     // Close the app by popping main window
@@ -650,7 +656,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     if (should_popup != s_big_nav_active) {
       s_big_nav_active = should_popup;
       if (s_big_nav_layer) {
-        layer_set_hidden(s_big_nav_layer, !s_big_nav_active);
+        layer_set_hidden(s_big_nav_layer, s_show_dashboard ? true : !s_big_nav_active);
         if (s_big_nav_active) {
           layer_mark_dirty(s_big_nav_layer);
           if (s_nav_view_mode != 2) {
