@@ -14,16 +14,17 @@ TopoNav brings full topographic map navigation, GPX route guidance, and workout 
 
 ## 🌟 Key Features (For Users)
 
-* 🗺️ **Detailed Topographic Maps**: Displays real-world topographic maps (contour lines, hiking paths, water bodies) in Pebble-native 64 colors (`GColor8`).
+* 🗺️ **Detailed Topographic Maps**: Displays real-world topographic maps (contour lines, hiking paths, water bodies) in Pebble-native 64 colors (`GColor8`). Supports **Fullscreen Map Mode** to hide header/footer and maximize the visible map area.
 * 🥾 **GPX Route Guidance**: Upload, name, and store multiple GPX files on your phone. Choose, activate, or deactivate routes directly from a dedicated on-watch menu.
 * 📍 **Sensor-Fused Compass Arrow**: A dynamic direction chevron representing your heading.
   * *Stationary (Speed <= 1.0 m/s)*: Aligns in real time using the watch's hardware magnetic compass.
   * *In Motion (Speed > 1.0 m/s)*: Automatically switches to GPS-based direction to filter out wrist-swing jitter.
 * ⏺️ **Activity Recording & GPX Export**: Start or stop recording your path by long-pressing the *Select* button on your watch (or using the phone UI). Export your finished workouts as standard `.gpx` files from the companion settings page.
-* 📊 **Dual-Column Stats Dashboard**: Real-time workout metrics at a glance:
-  * **Average Speed** and **Trip Distance** (Walked vs. Remaining in km) in large, bold fonts.
-  * **Elevation Profile** (Gain and Loss) for hikers.
-  * **GPS Coordinates** in real-time.
+* 👣 **Live Breadcrumb Trail**: Optionally displays your real-time traveled route directly on the map as a distinct colored line, so you can always retrace your steps.
+* 🗺️ **Interactive Trip History**: View your recorded walks on an interactive map directly within the settings page on your phone, including total distance, average speed, and elevation data.
+* 📊 **Dynamic Stats Dashboard**: Real-time workout metrics at a glance:
+  * Customize which metrics to display (Speed, Distance, Elevation, Coordinates) via the settings.
+  * The watch dynamically calculates the grid layout and maximizes font sizes based on your active fields.
 * 🔊 **Turn-by-Turn & Off-Route Alerts**: Screen indications and distinct vibration patterns notify you when a turn is approaching or when you drift more than 50 meters off-route.
 * 🔋 **High Contrast & Battery Indicator**: Optimised high-contrast white header/footer layouts for excellent sunlight legibility, complete with watch battery level percentage.
 * 🌐 **Multilingual Support**: Fully translated into both **English** and **German**.

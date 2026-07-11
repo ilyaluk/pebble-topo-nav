@@ -57,18 +57,25 @@ static bool s_recording_active = false;
 static int s_nav_bearing = -1; // -1 = no instruction, 0 = straight, 90 = right, 180 = uturn, 270 = left
 static bool s_is_english = false;
 static void update_ui_languages(void);
+static void layout_dashboard(void);
 
 // Fullscreen setting and dynamic map dimensions
 static uint16_t s_current_map_width = MAP_WIDTH;
 static uint16_t s_current_map_height = MAP_HEIGHT;
 static uint32_t s_current_map_buffer_size = MAP_WIDTH * MAP_HEIGHT;
 static bool s_fullscreen_mode = false;
+static uint8_t s_dashboard_fields = 31;
+static uint32_t s_route_ids[MAX_ROUTES];
+static char s_route_names[MAX_ROUTES][32];
+static uint16_t s_route_count = 0;
+static uint32_t s_active_route_id = 0;
 
 static GBitmap *s_map_bitmap = NULL;
 static uint8_t *s_map_buffer = NULL;
 static bool s_map_ready = false;
 
 #define PERSIST_KEY_FULLSCREEN_MODE 101
+#define PERSIST_KEY_DASHBOARD_FIELDS 102
 
 static int s_gps_heading = -1;
 static int s_gps_speed_cms = 0;
@@ -563,6 +570,16 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     }
   }
 
+  Tuple *fields_tuple = dict_find(iter, MESSAGE_KEY_DASHBOARD_FIELDS);
+  if (fields_tuple) {
+    uint8_t new_fields = fields_tuple->value->uint8;
+    if (new_fields != s_dashboard_fields) {
+      s_dashboard_fields = new_fields;
+      persist_write_int(PERSIST_KEY_DASHBOARD_FIELDS, s_dashboard_fields);
+      layout_dashboard();
+    }
+  }
+
   Tuple *route_count_tuple = dict_find(iter, MESSAGE_KEY_ROUTE_COUNT);
   if (route_count_tuple) {
     s_route_count = 0; // Reset count for syncing new list
@@ -691,6 +708,80 @@ static void update_ui_languages() {
   }
 }
 
+static void layout_dashboard(void) {
+  if (!s_dashboard_layer) return;
+
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_main_window));
+  #if defined(PBL_ROUND)
+  bounds = grect_inset(bounds, GEdgeInsets(10));
+  #endif
+  
+  int dash_h = bounds.size.h - HEADER_HEIGHT;
+  
+  bool active[5] = {
+    (s_dashboard_fields & 1) != 0,
+    (s_dashboard_fields & 2) != 0,
+    (s_dashboard_fields & 4) != 0,
+    (s_dashboard_fields & 8) != 0,
+    (s_dashboard_fields & 16) != 0
+  };
+  
+  TextLayer* t_layers[5] = { s_dash_avg_speed_title_layer, s_dash_dist_title_layer, s_dash_gain_title_layer, s_dash_loss_title_layer, s_dash_coords_title_layer };
+  TextLayer* v_layers[5] = { s_dash_avg_speed_val_layer, s_dash_dist_val_layer, s_dash_gain_val_layer, s_dash_loss_val_layer, s_dash_coords_val_layer };
+  
+  int active_count = 0;
+  for(int i = 0; i < 5; i++) {
+    layer_set_hidden(text_layer_get_layer(t_layers[i]), !active[i]);
+    layer_set_hidden(text_layer_get_layer(v_layers[i]), !active[i]);
+    if(active[i]) active_count++;
+  }
+
+  if (active_count == 0) return;
+  
+  int rows = 1, cols = 1;
+  if (active_count == 2) { rows = 2; cols = 1; }
+  else if (active_count == 3 || active_count == 4) { rows = 2; cols = 2; }
+  else if (active_count == 5) { rows = 3; cols = 2; }
+  
+  int row_h = dash_h / rows;
+  int col_w = (bounds.size.w - 15) / cols;
+  
+  const char* val_font = FONT_KEY_GOTHIC_24_BOLD;
+  if (rows == 1) val_font = FONT_KEY_BITHAM_42_BOLD;
+  else if (rows == 2 && cols == 1) val_font = FONT_KEY_BITHAM_34_MEDIUM_NUMBERS;
+  else if (rows == 2) val_font = FONT_KEY_GOTHIC_28_BOLD;
+
+  int current_idx = 0;
+  for(int i = 0; i < 5; i++) {
+    if(!active[i]) continue;
+    
+    int r = current_idx / cols;
+    int c = current_idx % cols;
+    
+    int x = (c == 0) ? 5 : (5 + col_w + 10);
+    int w = col_w;
+    int y = r * row_h;
+    
+    if (active_count == 5 && i == 4) {
+      x = 10;
+      w = bounds.size.w - 20;
+    }
+    
+    layer_set_frame(text_layer_get_layer(t_layers[i]), GRect(x, y + 2, w, 14));
+    layer_set_frame(text_layer_get_layer(v_layers[i]), GRect(x, y + 16, w, row_h - 18));
+    
+    if (active_count == 5 && i == 4) {
+      text_layer_set_font(v_layers[i], fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+    } else {
+      text_layer_set_font(v_layers[i], fonts_get_system_font(val_font));
+    }
+    
+    if (!(active_count == 5 && i == 4)) {
+      current_idx++;
+    }
+  }
+}
+
 // Window Loading Procedures
 static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
@@ -744,13 +835,8 @@ static void main_window_load(Window *window) {
   layer_set_hidden(s_dashboard_layer, true); // hidden on launch
   layer_add_child(window_layer, s_dashboard_layer);
   
-  int dash_h = bounds.size.h - HEADER_HEIGHT;
-  int row_h = dash_h / 3;
-  int col_w = (bounds.size.w - 15) / 2;
-  int col2_x = col_w + 10;
-  
   // Row 0: Left: Average Speed, Right: Remaining Distance
-  s_dash_avg_speed_title_layer = text_layer_create(GRect(5, 2, col_w, 14));
+  s_dash_avg_speed_title_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_avg_speed_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_avg_speed_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_avg_speed_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -758,15 +844,14 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_avg_speed_title_layer, "Ø-GESCHWIND.");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_avg_speed_title_layer));
   
-  s_dash_avg_speed_val_layer = text_layer_create(GRect(5, 16, col_w, row_h - 18));
+  s_dash_avg_speed_val_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_avg_speed_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_avg_speed_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_avg_speed_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(s_dash_avg_speed_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_avg_speed_val_layer));
   
-  s_dash_dist_title_layer = text_layer_create(GRect(col2_x, 2, col_w, 14));
+  s_dash_dist_title_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_dist_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_dist_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -774,16 +859,15 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_dist_title_layer, "DISTANZ (G/R)");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_title_layer));
   
-  s_dash_dist_val_layer = text_layer_create(GRect(col2_x, 16, col_w, row_h - 18));
+  s_dash_dist_val_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_dist_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_dist_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_dist_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_dash_dist_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_dist_val_layer, s_trip_distance_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_dist_val_layer));
   
   // Row 1: Left: Elevation Gain, Right: Elevation Loss
-  s_dash_gain_title_layer = text_layer_create(GRect(5, row_h + 2, col_w, 14));
+  s_dash_gain_title_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_gain_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_gain_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_gain_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -791,15 +875,14 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_gain_title_layer, "HM AUFSTIEG");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_gain_title_layer));
   
-  s_dash_gain_val_layer = text_layer_create(GRect(5, row_h + 16, col_w, row_h - 18));
+  s_dash_gain_val_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_gain_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_gain_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_gain_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_dash_gain_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_gain_val_layer));
   
-  s_dash_loss_title_layer = text_layer_create(GRect(col2_x, row_h + 2, col_w, 14));
+  s_dash_loss_title_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_loss_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_loss_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_loss_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -807,16 +890,15 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_loss_title_layer, "HM ABSTIEG");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_loss_title_layer));
   
-  s_dash_loss_val_layer = text_layer_create(GRect(col2_x, row_h + 16, col_w, row_h - 18));
+  s_dash_loss_val_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_loss_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_loss_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_loss_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_dash_loss_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_loss_val_layer));
   
   // Row 2: GPS Coordinates
-  s_dash_coords_title_layer = text_layer_create(GRect(10, (row_h * 2) + 2, bounds.size.w - 20, 14));
+  s_dash_coords_title_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_coords_title_layer, GColorClear);
   text_layer_set_text_color(s_dash_coords_title_layer, GColorDarkGray);
   text_layer_set_font(s_dash_coords_title_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
@@ -824,15 +906,15 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_dash_coords_title_layer, "GPS KOORDINATEN");
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_coords_title_layer));
   
-  s_dash_coords_val_layer = text_layer_create(GRect(10, (row_h * 2) + 16, bounds.size.w - 20, row_h - 18));
+  s_dash_coords_val_layer = text_layer_create(GRectZero);
   text_layer_set_background_color(s_dash_coords_val_layer, GColorClear);
   text_layer_set_text_color(s_dash_coords_val_layer, GColorBlack);
-  text_layer_set_font(s_dash_coords_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(s_dash_coords_val_layer, GTextAlignmentCenter);
   text_layer_set_text(s_dash_coords_val_layer, s_coords_text);
   layer_add_child(s_dashboard_layer, text_layer_get_layer(s_dash_coords_val_layer));
   
   update_ui_languages();
+  layout_dashboard();
   update_layout();
 }
 
@@ -1082,6 +1164,8 @@ static void init() {
   } else {
     s_is_english = false;
   }
+  
+  s_dashboard_fields = persist_exists(PERSIST_KEY_DASHBOARD_FIELDS) ? persist_read_int(PERSIST_KEY_DASHBOARD_FIELDS) : 31;
 
   s_main_window = window_create();
   window_set_window_handlers(s_main_window, (WindowHandlers) {

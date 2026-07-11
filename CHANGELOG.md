@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Dynamic Grid Layout Architecture (US-3)**: The dashboard is no longer a fixed layout. Users can now individually toggle data fields (Speed, Distance, Elevation Gain, Elevation Loss, Coordinates) via the settings. The watch automatically adjusts the grid layout and maximizes font sizes based on the number of active fields.
+
 ## [2.5.0] - 2026-06-14
 
 ### Added

@@ -254,6 +254,7 @@ function openConfigPage() {
             '&map=' + mapSource + 
             '&fullscreen=' + fullscreen + 
             '&show_breadcrumbs=' + showBreadcrumbs + 
+            '&dashboard_fields=' + (localStorage.getItem('dashboardFields') || '31') + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
             '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
             '&routes=' + encodeURIComponent(JSON.stringify(routesMeta)) +
@@ -628,6 +629,9 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var showBreadcrumbs = settings.showBreadcrumbs !== undefined ? settings.showBreadcrumbs : true;
       var oldShowBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
       localStorage.setItem('showBreadcrumbs', showBreadcrumbs ? 'true' : 'false');
+      
+      var dashboardFields = settings.dashboardFields !== undefined ? settings.dashboardFields : 31;
+      localStorage.setItem('dashboardFields', dashboardFields.toString());
 
       if (showBreadcrumbs !== oldShowBreadcrumbs) {
         console.log('Show breadcrumbs setting changed from ' + oldShowBreadcrumbs + ' to ' + showBreadcrumbs);
@@ -834,7 +838,8 @@ function onGPSError(err) {
     NAV_INSTRUCTION: isEnglish ? 'No GPS Signal' : 'Kein GPS-Signal',
     NAV_DISTANCE: '---',
     LANGUAGE: isEnglish ? 1 : 0,
-    FULLSCREEN_MODE: fullscreenMode
+    FULLSCREEN_MODE: fullscreenMode,
+    DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10)
   });
 }
 
@@ -850,7 +855,8 @@ function updateWatchNavigationAndMap() {
       LANGUAGE: isEnglish ? 1 : 0,
       RECORDING_STATE: isNavigating ? 1 : 0,
       ACTIVE_ROUTE_ID: activeRouteId,
-      FULLSCREEN_MODE: fullscreenMode
+      FULLSCREEN_MODE: fullscreenMode,
+      DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10)
     });
     return;
   }
@@ -865,7 +871,8 @@ function updateWatchNavigationAndMap() {
     GPS_SPEED: Math.round(currentSpeed * 100),
     GPS_HEADING: Math.round(currentHeading),
     ACTIVE_ROUTE_ID: activeRouteId,
-    FULLSCREEN_MODE: fullscreenMode
+    FULLSCREEN_MODE: fullscreenMode,
+    DASHBOARD_FIELDS: parseInt(localStorage.getItem('dashboardFields') || '31', 10)
   };
 
   var offRoute = false;

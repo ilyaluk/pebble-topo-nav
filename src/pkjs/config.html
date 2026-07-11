@@ -266,6 +266,30 @@
       <option value="true" selected>An / On</option>
       <option value="false">Aus / Off</option>
     </select>
+
+    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+      <div id="label-dashboard-fields" style="font-weight: 600; margin-bottom: 10px; font-size: 14px;">Dashboard-Datenfelder / Dashboard Data Fields</div>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-speed" value="1" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-speed">Ø-Geschwindigkeit / Speed</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-dist" value="2" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-dist">Distanz / Distance</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-gain" value="4" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-gain">Höhenmeter Anstieg / Elevation Gain</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-loss" value="8" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-loss">Höhenmeter Abstieg / Elevation Loss</span>
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
+        <input type="checkbox" id="field-coords" value="16" checked style="margin-right: 10px; width: 18px; height: 18px;">
+        <span id="label-field-coords">GPS-Koordinaten / GPS Coordinates</span>
+      </label>
+    </div>
   </div>
 
   <!-- GPX Import -->
@@ -395,7 +419,13 @@
       modalDur: "Dauer",
       modalSpeed: "Ø-Geschwindigkeit",
       modalEle: "Höhenmeter",
-      offlineWarning: "Internetverbindung erforderlich, um Karte zu laden."
+      offlineWarning: "Internetverbindung erforderlich, um Karte zu laden.",
+      dashboardFieldsLabel: "Dashboard-Datenfelder",
+      fieldSpeed: "Ø-Geschwindigkeit",
+      fieldDist: "Distanz",
+      fieldGain: "Höhenmeter Anstieg",
+      fieldLoss: "Höhenmeter Abstieg",
+      fieldCoords: "GPS-Koordinaten"
     },
     en: {
       title: "TopoNav Settings",
@@ -448,7 +478,13 @@
       modalDur: "Duration",
       modalSpeed: "Average Speed",
       modalEle: "Elevation Profile",
-      offlineWarning: "Internet connection required to load map."
+      offlineWarning: "Internet connection required to load map.",
+      dashboardFieldsLabel: "Dashboard Data Fields",
+      fieldSpeed: "Average Speed",
+      fieldDist: "Distance",
+      fieldGain: "Elevation Gain",
+      fieldLoss: "Elevation Loss",
+      fieldCoords: "GPS Coordinates"
     }
   };
 
@@ -492,6 +528,13 @@
     var breadcrumbsSelect = document.getElementById("show-breadcrumbs");
     breadcrumbsSelect.options[0].text = t.breadcrumbsOn;
     breadcrumbsSelect.options[1].text = t.breadcrumbsOff;
+    
+    document.getElementById("label-dashboard-fields").innerText = t.dashboardFieldsLabel;
+    document.getElementById("label-field-speed").innerText = t.fieldSpeed;
+    document.getElementById("label-field-dist").innerText = t.fieldDist;
+    document.getElementById("label-field-gain").innerText = t.fieldGain;
+    document.getElementById("label-field-loss").innerText = t.fieldLoss;
+    document.getElementById("label-field-coords").innerText = t.fieldCoords;
     
     // Restore saved values
     document.getElementById("gps-interval").value = gpsIntervalVal;
@@ -761,12 +804,20 @@
     var fullscreen = document.getElementById("fullscreen-map").value === "true";
     var showBreadcrumbs = document.getElementById("show-breadcrumbs").value === "true";
     
+    var dashboardFields = 0;
+    if (document.getElementById("field-speed").checked) dashboardFields |= 1;
+    if (document.getElementById("field-dist").checked) dashboardFields |= 2;
+    if (document.getElementById("field-gain").checked) dashboardFields |= 4;
+    if (document.getElementById("field-loss").checked) dashboardFields |= 8;
+    if (document.getElementById("field-coords").checked) dashboardFields |= 16;
+    
     var settings = {
       gpsInterval: gpsInterval,
       language: appLang,
       mapSource: mapSource,
       fullscreen: fullscreen,
-      showBreadcrumbs: showBreadcrumbs
+      showBreadcrumbs: showBreadcrumbs,
+      dashboardFields: dashboardFields
     };
     
     if (gpxCleared) {
@@ -822,6 +873,14 @@
   if (initialBreadcrumbs) {
     document.getElementById("show-breadcrumbs").value = initialBreadcrumbs;
   }
+  
+  var dbFieldsParam = getQueryParam("dashboard_fields");
+  var dbFields = dbFieldsParam ? parseInt(dbFieldsParam, 10) : 31;
+  document.getElementById("field-speed").checked = (dbFields & 1) !== 0;
+  document.getElementById("field-dist").checked = (dbFields & 2) !== 0;
+  document.getElementById("field-gain").checked = (dbFields & 4) !== 0;
+  document.getElementById("field-loss").checked = (dbFields & 8) !== 0;
+  document.getElementById("field-coords").checked = (dbFields & 16) !== 0;
   
   // Listen for language dropdown change
   document.getElementById("app-lang").addEventListener("change", function() {
