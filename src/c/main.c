@@ -65,6 +65,7 @@ static uint16_t s_current_map_height = MAP_HEIGHT;
 static uint32_t s_current_map_buffer_size = MAP_WIDTH * MAP_HEIGHT;
 static bool s_fullscreen_mode = false;
 static uint8_t s_dashboard_fields = 31;
+#define MAX_ROUTES 15
 static uint32_t s_route_ids[MAX_ROUTES];
 static char s_route_names[MAX_ROUTES][32];
 static uint16_t s_route_count = 0;
@@ -103,10 +104,19 @@ static const GPathInfo ARROW_INNER_PATH_INFO = {
   }
 };
 
-#define MAX_ROUTES 15
-static int s_route_count = 0;
-static uint32_t s_route_ids[MAX_ROUTES];
-static char s_route_names[MAX_ROUTES][32];
+static const GPathInfo BIG_ARROW_PATH_INFO = {
+  .num_points = 4,
+  .points = (GPoint []) {
+    {0, -45},
+    {30, 35},
+    {0, 15},
+    {-30, 35}
+  }
+};
+static GPath *s_big_arrow_path = NULL;
+static Layer *s_big_nav_layer = NULL;
+static bool s_big_nav_active = false;
+
 
 static void set_map_dimensions(int width, int height) {
   s_current_map_width = width;
@@ -147,7 +157,6 @@ static void update_layout() {
     set_map_dimensions(MAP_WIDTH, MAP_HEIGHT);
   }
 }
-static uint32_t s_active_route_id = 0;
 
 static Window *s_menu_window = NULL;
 static MenuLayer *s_menu_layer = NULL;
@@ -447,7 +456,13 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
-  if (s_show_dashboard) {
+  if (s_big_nav_active) {
+    // Dismiss auto-popup manually
+    s_big_nav_active = false;
+    if (s_big_nav_layer) {
+      layer_set_hidden(s_big_nav_layer, true);
+    }
+  } else if (s_show_dashboard) {
     // Return to map mode
     s_show_dashboard = false;
     layer_set_hidden(s_map_layer, s_show_dashboard);
@@ -480,6 +495,31 @@ static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
   window_long_click_subscribe(BUTTON_ID_SELECT, 500, select_long_click_handler, NULL);
   window_single_click_subscribe(BUTTON_ID_BACK, back_click_handler);
+}
+
+static void big_nav_update_proc(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+  
+  // Fill background
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  
+  // Draw Arrow
+  if (s_big_arrow_path) {
+    int32_t angle = (s_nav_bearing * TRIG_MAX_ANGLE) / 360;
+    gpath_rotate_to(s_big_arrow_path, angle);
+    GPoint center = GPoint(bounds.size.w / 2, bounds.size.h / 2 - 20);
+    gpath_move_to(s_big_arrow_path, center);
+    
+    graphics_context_set_fill_color(ctx, GColorWhite);
+    gpath_draw_filled(ctx, s_big_arrow_path);
+  }
+  
+  // Draw Distance Text
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(ctx, s_distance_text, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD),
+                     GRect(0, bounds.size.h - 55, bounds.size.w, 50),
+                     GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
 // AppMessage Callback Handlers
@@ -523,6 +563,21 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     }
     if (s_map_layer) {
       layer_mark_dirty(s_map_layer);
+    }
+  }
+
+  Tuple *popup_tuple = dict_find(iter, MESSAGE_KEY_NAV_POPUP_STATE);
+  if (popup_tuple) {
+    bool should_popup = (popup_tuple->value->uint8 == 1);
+    if (should_popup != s_big_nav_active) {
+      s_big_nav_active = should_popup;
+      if (s_big_nav_layer) {
+        layer_set_hidden(s_big_nav_layer, !s_big_nav_active);
+        if (s_big_nav_active) {
+          layer_mark_dirty(s_big_nav_layer);
+          vibes_short_pulse(); // Vibrate when auto-popup appears
+        }
+      }
     }
   }
   
@@ -916,6 +971,13 @@ static void main_window_load(Window *window) {
   update_ui_languages();
   layout_dashboard();
   update_layout();
+  
+  // 5. Big Navigation Popup Layer (overlays everything)
+  s_big_arrow_path = gpath_create(&BIG_ARROW_PATH_INFO);
+  s_big_nav_layer = layer_create(bounds);
+  layer_set_update_proc(s_big_nav_layer, big_nav_update_proc);
+  layer_set_hidden(s_big_nav_layer, true);
+  layer_add_child(window_layer, s_big_nav_layer);
 }
 
 // Window Unloading Procedures
@@ -928,6 +990,10 @@ static void main_window_unload(Window *window) {
   if (s_arrow_inner_path) {
     gpath_destroy(s_arrow_inner_path);
     s_arrow_inner_path = NULL;
+  }
+  if (s_big_arrow_path) {
+    gpath_destroy(s_big_arrow_path);
+    s_big_arrow_path = NULL;
   }
 
   // Free buffers
@@ -943,6 +1009,11 @@ static void main_window_unload(Window *window) {
   layer_destroy(s_header_layer);
   layer_destroy(s_map_layer);
   layer_destroy(s_footer_layer);
+  layer_destroy(s_dashboard_layer);
+  
+  if (s_big_nav_layer) {
+    layer_destroy(s_big_nav_layer);
+  }
   
   text_layer_destroy(s_dash_avg_speed_title_layer);
   text_layer_destroy(s_dash_avg_speed_val_layer);

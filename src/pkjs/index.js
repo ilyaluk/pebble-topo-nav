@@ -254,6 +254,7 @@ function openConfigPage() {
             '&map=' + mapSource + 
             '&fullscreen=' + fullscreen + 
             '&show_breadcrumbs=' + showBreadcrumbs + 
+            '&auto_nav_popup=' + (localStorage.getItem('autoNavPopup') || 'true') +
             '&dashboard_fields=' + (localStorage.getItem('dashboardFields') || '31') + 
             '&is_nav=' + (isNavigating ? 'true' : 'false') + 
             '&trips=' + encodeURIComponent(JSON.stringify(tripsMeta)) +
@@ -633,6 +634,9 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var dashboardFields = settings.dashboardFields !== undefined ? settings.dashboardFields : 31;
       localStorage.setItem('dashboardFields', dashboardFields.toString());
 
+      var autoNavPopup = settings.autoNavPopup !== undefined ? settings.autoNavPopup : true;
+      localStorage.setItem('autoNavPopup', autoNavPopup ? 'true' : 'false');
+
       if (showBreadcrumbs !== oldShowBreadcrumbs) {
         console.log('Show breadcrumbs setting changed from ' + oldShowBreadcrumbs + ' to ' + showBreadcrumbs);
         isSendingMap = false;
@@ -996,14 +1000,24 @@ function updateWatchNavigationAndMap() {
         payload.NAV_BEARING = turnBearingDiff > 0 ? 90 : 270;
         
         // Trigger turn haptic vibration at ~50 meters (only once per turn)
-        if (distToTurn <= 50 && lastVibratedTurnIdx !== turnIdx) {
-          vibrateAlert = 1; // Turn alert
-          lastVibratedTurnIdx = turnIdx;
+        if (distToTurn <= 50) {
+          if (lastVibratedTurnIdx !== turnIdx) {
+            vibrateAlert = 1; // Turn alert
+            lastVibratedTurnIdx = turnIdx;
+          }
+          if (localStorage.getItem('autoNavPopup') !== 'false') {
+            payload.NAV_POPUP_STATE = 1;
+          } else {
+            payload.NAV_POPUP_STATE = 0;
+          }
+        } else {
+          payload.NAV_POPUP_STATE = 0;
         }
       } else {
         payload.NAV_INSTRUCTION = isEnglish ? 'Follow the path' : 'Folge dem Weg';
         payload.NAV_DISTANCE = '---';
         payload.NAV_BEARING = 0; // straight
+        payload.NAV_POPUP_STATE = 0;
       }
     }
   } else {
@@ -1012,6 +1026,7 @@ function updateWatchNavigationAndMap() {
     payload.TRIP_DISTANCE = '--- / ---';
     payload.ELEVATION_GAIN = '---m / ---m';
     payload.ELEVATION_LOSS = '---m / ---m';
+    payload.NAV_POPUP_STATE = 0;
     closestTrackPointIdx = -1;
   }
   

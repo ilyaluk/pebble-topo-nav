@@ -267,6 +267,12 @@
       <option value="false">Aus / Off</option>
     </select>
 
+    <label for="auto-nav-popup" id="label-auto-nav-popup" style="margin-top: 15px;">Auto-Popup Navigation (< 50m)</label>
+    <select id="auto-nav-popup">
+      <option value="true" selected>An / On</option>
+      <option value="false">Aus / Off</option>
+    </select>
+
     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
       <div id="label-dashboard-fields" style="font-weight: 600; margin-bottom: 10px; font-size: 14px;">Dashboard-Datenfelder / Dashboard Data Fields</div>
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
@@ -411,6 +417,7 @@
       fullscreenOn: "An (Keine Header/Footer)",
       fullscreenOff: "Aus (Standardlayout)",
       breadcrumbsLabel: "Zurückgelegte Route anzeigen",
+      autoNavPopupLabel: "Auto-Popup Navigation (< 50m)",
       breadcrumbsOn: "An",
       breadcrumbsOff: "Aus",
       btnView: "Ansehen",
@@ -470,6 +477,7 @@
       fullscreenOn: "On (No Header/Footer)",
       fullscreenOff: "Off (Standard Layout)",
       breadcrumbsLabel: "Show Traveled Route",
+      autoNavPopupLabel: "Auto-Popup Navigation (< 50m)",
       breadcrumbsOn: "On",
       breadcrumbsOff: "Off",
       btnView: "View",
@@ -500,6 +508,7 @@
     var mapSourceVal = document.getElementById("map-source").value;
     var fullscreenVal = document.getElementById("fullscreen-map").value;
     var showBreadcrumbsVal = document.getElementById("show-breadcrumbs").value;
+    var autoNavPopupVal = document.getElementById("auto-nav-popup").value;
     
     document.getElementById("page-title").innerText = t.title;
     document.getElementById("card-general").innerText = t.general;
@@ -529,6 +538,8 @@
     breadcrumbsSelect.options[0].text = t.breadcrumbsOn;
     breadcrumbsSelect.options[1].text = t.breadcrumbsOff;
     
+    document.getElementById("label-auto-nav-popup").innerText = t.autoNavPopupLabel;
+    
     document.getElementById("label-dashboard-fields").innerText = t.dashboardFieldsLabel;
     document.getElementById("label-field-speed").innerText = t.fieldSpeed;
     document.getElementById("label-field-dist").innerText = t.fieldDist;
@@ -541,6 +552,7 @@
     document.getElementById("map-source").value = mapSourceVal;
     document.getElementById("fullscreen-map").value = fullscreenVal;
     document.getElementById("show-breadcrumbs").value = showBreadcrumbsVal;
+    document.getElementById("auto-nav-popup").value = autoNavPopupVal;
     
     document.getElementById("card-gpx").innerText = t.gpxRoute;
     document.getElementById("label-method-b").innerText = t.methodB;
@@ -803,6 +815,7 @@
     var mapSource = document.getElementById("map-source").value;
     var fullscreen = document.getElementById("fullscreen-map").value === "true";
     var showBreadcrumbs = document.getElementById("show-breadcrumbs").value === "true";
+    var autoNavPopup = document.getElementById("auto-nav-popup").value === "true";
     
     var dashboardFields = 0;
     if (document.getElementById("field-speed").checked) dashboardFields |= 1;
@@ -817,6 +830,7 @@
       mapSource: mapSource,
       fullscreen: fullscreen,
       showBreadcrumbs: showBreadcrumbs,
+      autoNavPopup: autoNavPopup,
       dashboardFields: dashboardFields
     };
     
@@ -872,6 +886,11 @@
   var initialBreadcrumbs = getQueryParam("show_breadcrumbs");
   if (initialBreadcrumbs) {
     document.getElementById("show-breadcrumbs").value = initialBreadcrumbs;
+  }
+  
+  var initialAutoNavPopup = getQueryParam("auto_nav_popup");
+  if (initialAutoNavPopup) {
+    document.getElementById("auto-nav-popup").value = initialAutoNavPopup;
   }
   
   var dbFieldsParam = getQueryParam("dashboard_fields");

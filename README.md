@@ -22,9 +22,10 @@ TopoNav brings full topographic map navigation, GPX route guidance, and workout 
 * ⏺️ **Activity Recording & GPX Export**: Start or stop recording your path by long-pressing the *Select* button on your watch (or using the phone UI). Export your finished workouts as standard `.gpx` files from the companion settings page.
 * 👣 **Live Breadcrumb Trail**: Optionally displays your real-time traveled route directly on the map as a distinct colored line, so you can always retrace your steps.
 * 🗺️ **Interactive Trip History**: View your recorded walks on an interactive map directly within the settings page on your phone, including total distance, average speed, and elevation data.
-* 📊 **Dynamic Stats Dashboard**: Real-time workout metrics at a glance:
-  * Customize which metrics to display (Speed, Distance, Elevation, Coordinates) via the settings.
-  * The watch dynamically calculates the grid layout and maximizes font sizes based on your active fields.
+* 📊 **Dynamic Stats Dashboard**: Real-time workout metrics:
+  * **Navigation Dashboard:** Toggleable dashboard view providing metrics like average speed, trip distance, elevation gain/loss, and exact coordinates.
+  * **Big Navigation View:** Auto-popup full-screen navigation arrow and distance when approaching a turn (< 50m). Can be toggled in settings.
+  * **Offline Tracking:** Follow the GPX path visually without needing turn-by-turn prompts if desired. The watch dynamically calculates the grid layout and maximizes font sizes based on your active fields.
 * 🔊 **Turn-by-Turn & Off-Route Alerts**: Screen indications and distinct vibration patterns notify you when a turn is approaching or when you drift more than 50 meters off-route.
 * 🔋 **High Contrast & Battery Indicator**: Optimised high-contrast white header/footer layouts for excellent sunlight legibility, complete with watch battery level percentage.
 * 🌐 **Multilingual Support**: Fully translated into both **English** and **German**.

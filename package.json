@@ -48,7 +48,8 @@
       "ROUTE_NAME",
       "ACTIVE_ROUTE_ID",
       "FULLSCREEN_MODE",
-      "DASHBOARD_FIELDS"
+      "DASHBOARD_FIELDS",
+      "NAV_POPUP_STATE"
     ],
     "resources": {
       "media": []

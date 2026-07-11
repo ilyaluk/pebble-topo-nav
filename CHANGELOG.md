@@ -3,7 +3,8 @@
 ## [Unreleased]
 
 ### Added
-- **Dynamic Grid Layout Architecture (US-3)**: The dashboard is no longer a fixed layout. Users can now individually toggle data fields (Speed, Distance, Elevation Gain, Elevation Loss, Coordinates) via the settings. The watch automatically adjusts the grid layout and maximizes font sizes based on the number of active fields.
+- **US-1: Big Navigation View**: Added an auto-popup full-screen navigation view that shows a large arrow and distance when approaching a turn (< 50m). Can be toggled in settings.
+- **US-3: Dynamic Grid Layout Architecture**: The dashboard is no longer a fixed layout. Users can now individually toggle data fields (Speed, Distance, Elevation Gain, Elevation Loss, Coordinates) via the settings. The watch automatically adjusts the grid layout and maximizes font sizes based on the number of active fields.
 
 ## [2.5.0] - 2026-06-14
 
