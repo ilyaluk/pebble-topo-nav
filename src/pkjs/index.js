@@ -217,8 +217,8 @@ function openConfigPage() {
   var showBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
   var savedTrips = JSON.parse(localStorage.getItem('savedTrips') || '[]');
   
-  // Keep only the latest 8 trips for the settings page to prevent URL overflow
-  var recentTrips = savedTrips.slice(-8);
+  // Keep only the latest 3 trips for the settings page to prevent URL overflow
+  var recentTrips = savedTrips.slice(-3);
   
   var tripsMeta = recentTrips.map(function(t) {
     return {
