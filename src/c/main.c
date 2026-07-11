@@ -395,7 +395,6 @@ static void map_layer_update_proc(Layer *layer, GContext *ctx) {
   }
 }
 
-// Dashboard Layer Update Callback (Draws structure lines)
 static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   
@@ -403,18 +402,36 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorClear);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   
+  int active_count = 0;
+  for(int i = 0; i < 5; i++) {
+    if ((s_dashboard_fields & (1 << i)) != 0) {
+      active_count++;
+    }
+  }
+
+  if (active_count <= 1) return;
+  
+  int rows = 1, cols = 1;
+  if (active_count == 2) { rows = 2; cols = 1; }
+  else if (active_count == 3 || active_count == 4) { rows = 2; cols = 2; }
+  else if (active_count == 5) { rows = 3; cols = 2; }
+  
+  int row_h = bounds.size.h / rows;
+  
   // Draw separation lines
   graphics_context_set_stroke_color(ctx, GColorDarkGray);
   graphics_context_set_stroke_width(ctx, 2);
   
-  int row_h = bounds.size.h / 3;
-  
   // Horizontal lines
-  graphics_draw_line(ctx, GPoint(10, row_h), GPoint(bounds.size.w - 10, row_h));
-  graphics_draw_line(ctx, GPoint(10, row_h * 2), GPoint(bounds.size.w - 10, row_h * 2));
+  for (int r = 1; r < rows; r++) {
+    graphics_draw_line(ctx, GPoint(10, r * row_h), GPoint(bounds.size.w - 10, r * row_h));
+  }
   
-  // Vertical line in middle (spanning Row 0 and Row 1)
-  graphics_draw_line(ctx, GPoint(bounds.size.w / 2, 5), GPoint(bounds.size.w / 2, row_h * 2 - 5));
+  // Vertical lines
+  if (cols > 1) {
+    int v_line_end = (active_count == 5) ? (row_h * 2) : bounds.size.h;
+    graphics_draw_line(ctx, GPoint(bounds.size.w / 2, 5), GPoint(bounds.size.w / 2, v_line_end - 5));
+  }
 }
 
 // Button Clicks Handlers
