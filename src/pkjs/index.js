@@ -248,7 +248,7 @@ function openConfigPage() {
     };
   });
   
-  var url = 'https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config_dev.html?v=' + Date.now() + 
+  var url = 'https://sirtob1.github.io/pebble-topo-nav/src/pkjs/config.html?v=' + Date.now() + 
             '&interval=' + interval + 
             '&lang=' + lang + 
             '&map=' + mapSource + 
