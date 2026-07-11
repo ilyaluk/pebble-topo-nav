@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.1] - 2026-07-11
+
+### Fixed
+- **Settings Page Routes Rendering:** Fixed an issue where the saved routes would not be visible in the Settings Page after a long GPX track was imported. The URL parameters passed to the Settings Page were sometimes getting truncated by the Pebble app due to massive track points in the latest recorded trips. The route parameter has been moved earlier in the URL payload to guarantee delivery.
+
 ## [2.6.0] - 2026-07-11
 
 ### Added
