@@ -855,8 +855,12 @@
     if (document.getElementById("field-dist").checked) dashboardFields |= 2;
     if (document.getElementById("field-gain").checked) dashboardFields |= 4;
     if (document.getElementById("field-loss").checked) dashboardFields |= 8;
-    if (document.getElementById("field-coords").checked) dashboardFields |= 16;
-    
+    if (document.getElementById("field-alt").checked) dashboardFields |= 16;
+    if (document.getElementById("field-time").checked) dashboardFields |= 32;
+    if (document.getElementById("field-duration").checked) dashboardFields |= 64;
+    if (document.getElementById("field-heading").checked) dashboardFields |= 128;
+    if (document.getElementById("field-battery").checked) dashboardFields |= 256;
+    if (document.getElementById("field-dist-dest").checked) dashboardFields |= 512;
     var settings = {
       gpsInterval: gpsInterval,
       language: appLang,
@@ -920,7 +924,12 @@
   document.getElementById("field-dist").checked = (dbFields & 2) !== 0;
   document.getElementById("field-gain").checked = (dbFields & 4) !== 0;
   document.getElementById("field-loss").checked = (dbFields & 8) !== 0;
-  document.getElementById("field-coords").checked = (dbFields & 16) !== 0;
+  document.getElementById("field-alt").checked = (dbFields & 16) !== 0;
+  document.getElementById("field-time").checked = (dbFields & 32) !== 0;
+  document.getElementById("field-duration").checked = (dbFields & 64) !== 0;
+  document.getElementById("field-heading").checked = (dbFields & 128) !== 0;
+  document.getElementById("field-battery").checked = (dbFields & 256) !== 0;
+  document.getElementById("field-dist-dest").checked = (dbFields & 512) !== 0;
   
   // Listen for language dropdown change
   document.getElementById("app-lang").addEventListener("change", function() {
