@@ -752,7 +752,7 @@
   var savedRoutesMeta = [];
   if (routesParam) {
     try {
-      savedRoutesMeta = JSON.parse(decodeURIComponent(routesParam));
+      savedRoutesMeta = JSON.parse(routesParam);
     } catch(e) {
       console.log('Error parsing routes parameter: ' + e);
     }
@@ -969,7 +969,7 @@
   var savedTripsMeta = [];
   if (tripsParam) {
     try {
-      savedTripsMeta = JSON.parse(decodeURIComponent(tripsParam));
+      savedTripsMeta = JSON.parse(tripsParam);
     } catch(e) {
       console.log('Error parsing trips param: ' + e);
     }
