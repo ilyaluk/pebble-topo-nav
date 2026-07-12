@@ -752,7 +752,11 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 
   Tuple *fields_tuple = dict_find(iter, MESSAGE_KEY_DASHBOARD_FIELDS);
   if (fields_tuple) {
-    uint8_t new_fields = fields_tuple->value->uint8;
+    uint16_t new_fields = s_dashboard_fields;
+    if (fields_tuple->length == 4) new_fields = fields_tuple->value->uint32;
+    else if (fields_tuple->length == 2) new_fields = fields_tuple->value->uint16;
+    else new_fields = fields_tuple->value->uint8;
+    
     if (new_fields != s_dashboard_fields) {
       s_dashboard_fields = new_fields;
       persist_write_int(PERSIST_KEY_DASHBOARD_FIELDS, s_dashboard_fields);
@@ -792,15 +796,27 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
   }
   Tuple *gain_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_GAIN);
-  if (gain_tuple && s_dash_gain_val_layer) {
+  if(gain_tuple && s_dash_gain_val_layer) {
     snprintf(s_elevation_gain_text, sizeof(s_elevation_gain_text), "%s", gain_tuple->value->cstring);
+    char *slash = strstr(s_elevation_gain_text, " / ");
+    if (slash) {
+      slash[0] = '\n';
+      memmove(slash + 1, slash + 3, strlen(slash + 3) + 1);
+    }
     text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
   }
+
   Tuple *loss_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_LOSS);
-  if (loss_tuple && s_dash_loss_val_layer) {
+  if(loss_tuple && s_dash_loss_val_layer) {
     snprintf(s_elevation_loss_text, sizeof(s_elevation_loss_text), "%s", loss_tuple->value->cstring);
+    char *slash = strstr(s_elevation_loss_text, " / ");
+    if (slash) {
+      slash[0] = '\n';
+      memmove(slash + 1, slash + 3, strlen(slash + 3) + 1);
+    }
     text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
   }
+  
   Tuple *trip_dist_tuple = dict_find(iter, MESSAGE_KEY_TRIP_DISTANCE);
   if (trip_dist_tuple && s_dash_dist_val_layer) {
     snprintf(s_trip_distance_text, sizeof(s_trip_distance_text), "%s", trip_dist_tuple->value->cstring);
@@ -986,9 +1002,8 @@ static void layout_dashboard(void) {
   int row_h = dynamic_h / rows;
   int col_w = bounds.size.w / cols;
   
-  const char* val_font = FONT_KEY_GOTHIC_24_BOLD;
-  if (rows == 1 || cols == 1) val_font = FONT_KEY_GOTHIC_28_BOLD;
-  else if (rows == 2) val_font = FONT_KEY_GOTHIC_28_BOLD;
+  const char* val_font = FONT_KEY_GOTHIC_28_BOLD;
+  if (cols == 2) val_font = FONT_KEY_GOTHIC_24_BOLD;
 
   int current_idx = 0;
   for(int i = 0; i < 10; i++) {
@@ -1001,9 +1016,20 @@ static void layout_dashboard(void) {
     int w = col_w;
     int y = bounds.origin.y + r * row_h;
     
-    layer_set_frame(text_layer_get_layer(t_layers[i]), GRect(x + 2, y + 2, w - 4, 18));
-    layer_set_frame(text_layer_get_layer(v_layers[i]), GRect(x + 2, y + 20, w - 4, row_h - 22));
-    text_layer_set_font(v_layers[i], fonts_get_system_font(val_font));
+    if (active_count == 3 && current_idx == 2) {
+      x = bounds.origin.x;
+      w = bounds.size.w;
+    }
+    
+    layer_set_frame(text_layer_get_layer(t_layers[i]), GRect(x + 2, y + 2, w - 4, 16));
+    layer_set_frame(text_layer_get_layer(v_layers[i]), GRect(x + 2, y + 18, w - 4, row_h - 18));
+    
+    const char* current_font = val_font;
+    if (cols == 2 && (i == 2 || i == 3)) { // Gain or Loss
+      current_font = FONT_KEY_GOTHIC_18_BOLD;
+    }
+    
+    text_layer_set_font(v_layers[i], fonts_get_system_font(current_font));
     
     current_idx++;
   }
