@@ -1,12 +1,14 @@
 {
   "name": "pebble-topo-nav",
   "author": "Antigravity",
-  "version": "2.6.0",
+  "version": "2.6.2",
   "keywords": [
     "pebble-app"
   ],
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "jimp": "^1.6.1"
+  },
   "pebble": {
     "displayName": "TopoNav",
     "uuid": "4f84c311-665e-4ad2-abdf-cbb612f0e4b7",
