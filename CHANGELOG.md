@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.2] - 2026-07-12
+
+### Fixed
+- **Pebble Round Layout Support:** Adapted the watch app's UI layout (Header, Footer, Dashboard) to properly fit the round display (Chalk platform) without cutting off text elements or navigation arrows.
+
 ## [2.6.1] - 2026-07-11
 
 ### Fixed

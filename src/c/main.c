@@ -268,7 +268,7 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx, GPoint(0, bounds.size.h - 1), GPoint(bounds.size.w, bounds.size.h - 1));
   
-#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_CHALK)
+#if defined(PBL_PLATFORM_EMERY)
   // Draw Zoom level text on top-right
   static char zoom_buf[8];
   snprintf(zoom_buf, sizeof(zoom_buf), "Z:%d", s_zoom_level);
@@ -298,6 +298,29 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
     graphics_context_set_fill_color(ctx, GColorRed);
     graphics_fill_rect(ctx, GRect(bounds.size.w - 102, 8, 6, 6), 3, GCornersAll);
   }
+#elif defined(PBL_PLATFORM_CHALK)
+  // Hide Zoom
+  BatteryChargeState battery = battery_state_service_peek();
+  static char battery_buf[8];
+  snprintf(battery_buf, sizeof(battery_buf), "%d%%", battery.charge_percent);
+  graphics_context_set_text_color(ctx, GColorBlack);
+  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                     GRect(125, 6, 30, 20),
+                     GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+                     
+  // Draw GPS Status icon
+  if (s_gps_connected) {
+    graphics_context_set_fill_color(ctx, GColorIslamicGreen);
+  } else {
+    graphics_context_set_fill_color(ctx, GColorRed);
+  }
+  graphics_fill_rect(ctx, GRect(115, 12, 6, 6), 3, GCornersAll);
+  
+  // Draw Recording Status dot
+  if (s_recording_active) {
+    graphics_context_set_fill_color(ctx, GColorRed);
+    graphics_fill_rect(ctx, GRect(105, 12, 6, 6), 3, GCornersAll);
+  }
 #else
   // On Basalt/Aplite (144px): Hide Zoom from header to save space
   BatteryChargeState battery = battery_state_service_peek();
@@ -325,7 +348,11 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   
   // Draw Arrow
   if (s_nav_bearing != -1) {
+#if defined(PBL_PLATFORM_CHALK)
+    draw_arrow(ctx, GPoint(35, bounds.size.h / 2), s_nav_bearing);
+#else
     draw_arrow(ctx, GPoint(18, bounds.size.h / 2), s_nav_bearing);
+#endif
   }
 }
 
@@ -945,9 +972,9 @@ static void layout_dashboard(void) {
   layer_set_hidden(text_layer_get_layer(s_dash_coords_title_layer), false);
   layer_set_hidden(text_layer_get_layer(s_dash_coords_val_layer), false);
   
-  int coords_y = dynamic_h;
-  layer_set_frame(text_layer_get_layer(s_dash_coords_title_layer), GRect(5, coords_y, bounds.size.w - 10, 18));
-  layer_set_frame(text_layer_get_layer(s_dash_coords_val_layer), GRect(5, coords_y + 16, bounds.size.w - 10, 18));
+  int coords_y = bounds.origin.y + dynamic_h;
+  layer_set_frame(text_layer_get_layer(s_dash_coords_title_layer), GRect(bounds.origin.x + 5, coords_y, bounds.size.w - 10, 18));
+  layer_set_frame(text_layer_get_layer(s_dash_coords_val_layer), GRect(bounds.origin.x + 5, coords_y + 16, bounds.size.w - 10, 18));
   text_layer_set_font(s_dash_coords_val_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
 
   if (active_count == 0) return;
@@ -970,9 +997,9 @@ static void layout_dashboard(void) {
     int r = current_idx / cols;
     int c = current_idx % cols;
     
-    int x = c * col_w;
+    int x = bounds.origin.x + c * col_w;
     int w = col_w;
-    int y = r * row_h;
+    int y = bounds.origin.y + r * row_h;
     
     layer_set_frame(text_layer_get_layer(t_layers[i]), GRect(x + 2, y + 2, w - 4, 18));
     layer_set_frame(text_layer_get_layer(v_layers[i]), GRect(x + 2, y + 20, w - 4, row_h - 22));
@@ -999,7 +1026,9 @@ static void main_window_load(Window *window) {
   layer_add_child(window_layer, s_header_layer);
   
   // Distance text in header (left indent for arrow)
-#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_CHALK)
+#if defined(PBL_PLATFORM_CHALK)
+  s_distance_layer = text_layer_create(GRect(45, 6, 60, 26));
+#elif defined(PBL_PLATFORM_EMERY)
   s_distance_layer = text_layer_create(GRect(35, 2, bounds.size.w - 137, 26));
 #else
   s_distance_layer = text_layer_create(GRect(32, 0, bounds.size.w - 94, 24));
@@ -1021,7 +1050,11 @@ static void main_window_load(Window *window) {
   layer_add_child(window_layer, s_footer_layer);
   
   // Instruction Text in Footer
+#if defined(PBL_PLATFORM_CHALK)
+  s_instruction_layer = text_layer_create(GRect(25, 2, bounds.size.w - 50, FOOTER_HEIGHT - 4));
+#else
   s_instruction_layer = text_layer_create(GRect(6, 2, bounds.size.w - 12, FOOTER_HEIGHT - 4));
+#endif
   text_layer_set_background_color(s_instruction_layer, GColorClear);
   text_layer_set_text_color(s_instruction_layer, GColorBlack);
   text_layer_set_font(s_instruction_layer, fonts_get_system_font(INSTRUCTION_FONT));

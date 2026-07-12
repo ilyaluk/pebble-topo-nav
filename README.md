@@ -6,7 +6,7 @@
 > **This is a Vibe-Coding project! 🎸✨**
 > Built interactively using advanced agentic AI pair-programming to prototype, test, and implement features on-the-fly.
 
-TopoNav brings full topographic map navigation, GPX route guidance, and workout tracking directly to your wrist. Compatible with all Pebble platforms (including Pebble Time 2/`emery`), it works by companion-stitching live OpenTopoMap tiles, rendering colored route paths, and utilizing sensor-fused compass/GPS headings.
+TopoNav brings full topographic map navigation, GPX route guidance, and workout tracking directly to your wrist. Compatible with all Pebble platforms (including Pebble Time 2/`emery` and Pebble Round/`chalk`), it works by companion-stitching live OpenTopoMap tiles, rendering colored route paths, and utilizing sensor-fused compass/GPS headings.
 
 ![TopoNav Banner](images/appstore_banner.png)
 
