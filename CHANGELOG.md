@@ -1,14 +1,10 @@
 # Changelog
 
-## [2.6.2] - 2026-07-12
+## [2.7.0] - 2026-07-12
 
 ### Fixed
 - **Pebble Round Layout Support:** Adapted the watch app's UI layout (Header, Footer, Dashboard) to properly fit the round display (Chalk platform) without cutting off text elements or navigation arrows.
 - **Dashboard Fields Visibility & Layout (US-11):** Fixed an issue where the Battery and Distance to Destination fields were invisible due to 8-bit truncation. Improved the grid layout to perfectly center the 3rd item when exactly 3 fields are active, and optimized line breaks for Elevation Gain/Loss fields.
-
-## [2.6.1] - 2026-07-11
-
-### Fixed
 - **Settings Page Routes Rendering:** Fixed an issue where the saved routes would not be visible in the Settings Page after a long GPX track was imported. The URL parameters passed to the Settings Page were sometimes getting truncated by the Pebble app due to massive track points in the latest recorded trips. The route parameter has been moved earlier in the URL payload to guarantee delivery.
 
 ## [2.6.0] - 2026-07-11
