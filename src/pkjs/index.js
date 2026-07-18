@@ -1,3 +1,4 @@
+var LatLon = require('./latlon-spherical.js');
 var png = require('./png');
 var graphics = require('./graphics');
 var MAP_WIDTH = 200;
@@ -909,13 +910,20 @@ function updateWatchNavigationAndMap() {
     var minDist = Infinity;
     var closestIdx = -1;
     
-    for (var k = 0; k < gpxTrack.length; k++) {
-      var d = haversineDistance(
-        currentLocation.lat,
-        currentLocation.lon,
-        gpxTrack[k].lat,
-        gpxTrack[k].lon
-      );
+    // ToDo: Error: This will take either the point you just passed or the pointe you're heading to
+    // or even a point on a parallel road which happens to currently be closes to you but currently totally not
+    // relevant. Which makes the upcoming calculations largely incorrect.
+    // For finding the next turn, it apparently expects closestIdx to be the last point you passed.
+    // For distance to turn it seems to expect the upcoming point.
+    // The drawing routine draws the line from cosestIdx to the next as first 'red' line. So I would say this also
+    // expects it to be the last point you passed.
+    // Fix: Either take the traveling direction into account and use the distance to the line between two points (best)
+    //      or try to keep track off the last point you passed.
+
+    // Get the section we're on. closestIdx is the start of that section (which we already passed).
+    var curLoc = new LatLon(currentLocation.lat, currentLocation.lon);
+    for (var k = 0; k < gpxTrack.length - 1; k++) {
+      var d = curLoc.crossTrackDistanceTo(new LatLon(gpxTrack[k].lat, gpxTrack[k].lon), new LatLon(gpxTrack[k+1].lat, gpxTrack[k+1].lon)      );
       if (d < minDist) {
         minDist = d;
         closestIdx = k;
@@ -927,6 +935,11 @@ function updateWatchNavigationAndMap() {
     localStorage.setItem('closestTrackPointIdx', closestTrackPointIdx);
     
     // Calculate walked and remaining distance along the track
+
+    // ToDo: Calculate the distance between the previous point and the current location and the next point
+    // and the current location and take this into account for walked / remaining.
+    // There can be quite some meters between two points.
+
     var walkedDist = 0;
     for (var i = 0; i < closestIdx; i++) {
       walkedDist += haversineDistance(gpxTrack[i].lat, gpxTrack[i].lon, gpxTrack[i + 1].lat, gpxTrack[i + 1].lon);
@@ -963,6 +976,8 @@ function updateWatchNavigationAndMap() {
     payload.ELEVATION_LOSS = Math.round(lossMade) + ' ' + Math.round(lossRemaining);
     
     // Check if user is Off-Route (> 50 meters)
+// ToDo: Error: The fact I'm > 50 meters from the closest point does not mean I'm also > 50 meters
+    // from the line between those points. So I'm not necessarily off-route.
     if (minDist > 50) {
       offRoute = true;
       payload.OFF_ROUTE = 1;
