@@ -758,44 +758,49 @@ function restartGPSTracking() {
 }
 
 function onGPSSuccess(position) {
+  var now = Date.now();
+  var timediff = 0.0;
+  if ( lastPositionTime ) {
+    timediff = (now - lastPositionTime) / 1000;
+    if ( timediff < gpsInterval ) {
+      return;
+    }
+  }
+  lastPositionTime = now;
+
   var lat = position.coords.latitude;
   var lon = position.coords.longitude;
-  var now = Date.now();
   
   currentSpeed = position.coords.speed !== null && position.coords.speed !== undefined ? position.coords.speed : 0;
   currentHeading = position.coords.heading !== null && position.coords.heading !== undefined ? position.coords.heading : -1;
   
-  if (lastPositionTime && lastPositionCoords) {
-    var dt = (now - lastPositionTime) / 1000;
-    if (dt > 0.5) {
-      var ds = haversineDistance(
-        lastPositionCoords.latitude,
-        lastPositionCoords.longitude,
-        lat,
-        lon
-      );
-      
-      var calculatedSpeed = ds / dt;
-      if (position.coords.speed === null || position.coords.speed === undefined) {
-        currentSpeed = calculatedSpeed;
-      }
-      
-      if (currentHeading === -1 && calculatedSpeed > 0.8 && ds > 0.8) {
-        currentHeading = getBearing(lastPositionCoords.latitude, lastPositionCoords.longitude, lat, lon);
-      }
-      
-      if (currentSpeed > 0.5 && ds > 0.5) {
-        if (isNavigating) {
-          totalMovingDistance += ds;
-          totalMovingTimeSec += dt;
-          localStorage.setItem('totalMovingDistance', totalMovingDistance);
-          localStorage.setItem('totalMovingTimeSec', totalMovingTimeSec);
-        }
+  if ( timediff > 0 && lastPositionCoords ) {
+    var ds = haversineDistance(
+      lastPositionCoords.latitude,
+      lastPositionCoords.longitude,
+      lat,
+      lon
+    );
+    
+    var calculatedSpeed = ds / timediff;
+    if (position.coords.speed === null || position.coords.speed === undefined) {
+      currentSpeed = calculatedSpeed;
+    }
+    
+    if (currentHeading === -1 && calculatedSpeed > 0.8 && ds > 0.8) {
+      currentHeading = getBearing(lastPositionCoords.latitude, lastPositionCoords.longitude, lat, lon);
+    }
+    
+    if (currentSpeed > 0.5 && ds > 0.5) {
+      if (isNavigating) {
+        totalMovingDistance += ds;
+        totalMovingTimeSec += timediff;
+        localStorage.setItem('totalMovingDistance', totalMovingDistance);
+        localStorage.setItem('totalMovingTimeSec', totalMovingTimeSec);
       }
     }
   }
   
-  lastPositionTime = now;
   lastPositionCoords = { latitude: lat, longitude: lon };
 
   currentLocation = {
