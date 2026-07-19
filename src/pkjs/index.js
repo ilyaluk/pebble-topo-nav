@@ -923,7 +923,7 @@ function updateWatchNavigationAndMap() {
     // Get the section we're on. closestIdx is the start of that section (which we already passed).
     var curLoc = new LatLon(currentLocation.lat, currentLocation.lon);
     for (var k = 0; k < gpxTrack.length - 1; k++) {
-      var d = curLoc.crossTrackDistanceTo(new LatLon(gpxTrack[k].lat, gpxTrack[k].lon), new LatLon(gpxTrack[k+1].lat, gpxTrack[k+1].lon)      );
+      var d = Math.abs(curLoc.crossTrackDistanceTo(new LatLon(gpxTrack[k].lat, gpxTrack[k].lon), new LatLon(gpxTrack[k+1].lat, gpxTrack[k+1].lon)));
       if (d < minDist) {
         minDist = d;
         closestIdx = k;
