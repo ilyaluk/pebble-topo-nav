@@ -882,7 +882,7 @@ function updateWatchNavigationAndMap() {
   var avgSpeedKmh = totalMovingTimeSec > 0 ? (totalMovingDistance / totalMovingTimeSec) * 3.6 : 0;
   var payload = {
     GPS_CONNECTED: 1,
-    AVG_SPEED: avgSpeedKmh.toFixed(1) + ' km/h',
+    AVG_SPEED: avgSpeedKmh.toFixed(1),
     GPS_COORDS: currentLocation.lat.toFixed(5) + ', ' + currentLocation.lon.toFixed(5),
     LANGUAGE: isEnglish ? 1 : 0,
     RECORDING_STATE: isNavigating ? 1 : 0,
@@ -926,12 +926,12 @@ function updateWatchNavigationAndMap() {
     for (var i = 0; i < closestIdx; i++) {
       walkedDist += haversineDistance(gpxTrack[i].lat, gpxTrack[i].lon, gpxTrack[i + 1].lat, gpxTrack[i + 1].lon);
     }
-    
+
     var remDist = 0;
     for (var j = closestIdx; j < gpxTrack.length - 1; j++) {
       remDist += haversineDistance(gpxTrack[j].lat, gpxTrack[j].lon, gpxTrack[j + 1].lat, gpxTrack[j + 1].lon);
     }
-    payload.TRIP_DISTANCE = (walkedDist / 1000).toFixed(1) + ' / ' + (remDist / 1000).toFixed(1);
+    payload.TRIP_DISTANCE = (walkedDist / 1000).toFixed(1) + ' ' + (remDist / 1000).toFixed(1);
     
     // Calculate elevation stats based on GPX track elevations
     var gainMade = 0;
@@ -954,8 +954,8 @@ function updateWatchNavigationAndMap() {
       }
     }
     
-    payload.ELEVATION_GAIN = Math.round(gainMade) + 'm / ' + Math.round(gainRemaining) + 'm';
-    payload.ELEVATION_LOSS = Math.round(lossMade) + 'm / ' + Math.round(lossRemaining) + 'm';
+    payload.ELEVATION_GAIN = Math.round(gainMade) + ' ' + Math.round(gainRemaining);
+    payload.ELEVATION_LOSS = Math.round(lossMade) + ' ' + Math.round(lossRemaining);
     
     // Check if user is Off-Route (> 50 meters)
     if (minDist > 50) {
@@ -992,7 +992,7 @@ function updateWatchNavigationAndMap() {
           break;
         }
       }
-      
+
       if (turnIdx !== -1) {
         // Accumulate distance along the path
         distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon);
@@ -1009,26 +1009,25 @@ function updateWatchNavigationAndMap() {
         // Formulate instruction text
         var dirText = '';
         if (isEnglish) {
-          dirText = turnBearingDiff > 0 ? 'turn right' : 'turn left';
-          payload.NAV_INSTRUCTION = dirText.charAt(0).toUpperCase() + dirText.slice(1) + ' soon';
+          dirText = turnBearingDiff > 0 ? 'Right' : 'Left';
         } else {
-          dirText = turnBearingDiff > 0 ? 'rechts abbiegen' : 'links abbiegen';
-          payload.NAV_INSTRUCTION = 'In Kürze ' + dirText;
+          dirText = turnBearingDiff > 0 ? 'Rechts' : 'Links';
         }
+        payload.NAV_INSTRUCTION = dirText + ' in ' + payload.NAV_DISTANCE;
         
         // Map bearing to 0=straight, 90=right, 180=uturn, 270=left
         payload.NAV_BEARING = turnBearingDiff > 0 ? 90 : 270;
         
-        // Trigger turn haptic vibration at ~50 meters (only once per turn)
+        // Trigger turn haptic vibration and popup at ~50 meters (only once per turn)
         if (distToTurn <= 50) {
           if (lastVibratedTurnIdx !== turnIdx) {
             vibrateAlert = turnBearingDiff > 0 ? 3 : 1; // 3 = Right, 1 = Left
             lastVibratedTurnIdx = turnIdx;
-          }
-          if (localStorage.getItem('navViewMode') !== '1') { // 1 = Map Only, so 0 and 2 will show popup
-            payload.NAV_POPUP_STATE = 1;
-          } else {
-            payload.NAV_POPUP_STATE = 0;
+            if (localStorage.getItem('navViewMode') !== '1') { // 1 = Map Only, so 0 and 2 will show popup
+              payload.NAV_POPUP_STATE = 1;
+            } else {
+              payload.NAV_POPUP_STATE = 0;
+            }
           }
         } else {
           payload.NAV_POPUP_STATE = 0;
@@ -1040,23 +1039,17 @@ function updateWatchNavigationAndMap() {
            distToTurn += haversineDistance(gpxTrack[j].lat, gpxTrack[j].lon, gpxTrack[j+1].lat, gpxTrack[j+1].lon);
         }
         
-        if (distToTurn > 1000) {
-           payload.NAV_DISTANCE = (distToTurn / 1000).toFixed(1) + 'km';
-        } else {
-           payload.NAV_DISTANCE = Math.round(distToTurn) + 'm';
-        }
-
-        payload.NAV_INSTRUCTION = isEnglish ? 'Follow the path' : 'Folge dem Weg';
+        payload.NAV_INSTRUCTION = isEnglish ? 'Go straight' : 'Gerade aus';
         payload.NAV_BEARING = 0; // straight
         payload.NAV_POPUP_STATE = 0;
       }
     }
   } else {
-    payload.NAV_INSTRUCTION = isEnglish ? 'No GPX route loaded' : 'Keine GPX-Route geladen';
+    payload.NAV_INSTRUCTION = isEnglish ? 'No route' : 'Keine Route';
     payload.NAV_DISTANCE = '---';
-    payload.TRIP_DISTANCE = '--- / ---';
-    payload.ELEVATION_GAIN = '---m / ---m';
-    payload.ELEVATION_LOSS = '---m / ---m';
+    payload.TRIP_DISTANCE = '--- ---';
+    payload.ELEVATION_GAIN = '--- ---';
+    payload.ELEVATION_LOSS = '--- ---';
     payload.NAV_POPUP_STATE = 0;
     closestTrackPointIdx = -1;
   }

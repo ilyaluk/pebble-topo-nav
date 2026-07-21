@@ -1,13 +1,17 @@
 #include <pebble.h>
 
 #define CHUNK_SIZE 3000
+//#define PBL_PLATFORM_EMERY
 #if defined(PBL_PLATFORM_EMERY)
   #define MAP_WIDTH 200
   #define MAP_HEIGHT 150
   #define HEADER_HEIGHT 30
   #define FOOTER_HEIGHT 48
   #define DISTANCE_FONT FONT_KEY_GOTHIC_24_BOLD
-  #define INSTRUCTION_FONT FONT_KEY_GOTHIC_18_BOLD
+  #define INSTRUCTION_FONT FONT_KEY_GOTHIC_28_BOLD
+  #define FONT_ONE_COL FONT_KEY_BITHAM_30_BLACK
+  #define FONT_TWO_COL FONT_KEY_GOTHIC_28_BOLD
+  #define FONT_HEADER FONT_KEY_GOTHIC_24
 #elif defined(PBL_PLATFORM_CHALK)
   #define MAP_WIDTH 180
   #define MAP_HEIGHT 114
@@ -15,6 +19,9 @@
   #define FOOTER_HEIGHT 36
   #define DISTANCE_FONT FONT_KEY_GOTHIC_18_BOLD
   #define INSTRUCTION_FONT FONT_KEY_GOTHIC_14_BOLD
+  #define FONT_ONE_COL FONT_KEY_BITHAM_30_BLACK
+  #define FONT_TWO_COL FONT_KEY_GOTHIC_28_BOLD
+  #define FONT_HEADER FONT_KEY_GOTHIC_18
 #else // basalt, aplite
   #define MAP_WIDTH 144
   #define MAP_HEIGHT 112
@@ -22,6 +29,9 @@
   #define FOOTER_HEIGHT 32
   #define DISTANCE_FONT FONT_KEY_GOTHIC_18_BOLD
   #define INSTRUCTION_FONT FONT_KEY_GOTHIC_14_BOLD
+  #define FONT_ONE_COL FONT_KEY_GOTHIC_28_BOLD
+  #define FONT_TWO_COL FONT_KEY_GOTHIC_24_BOLD
+  #define FONT_HEADER FONT_KEY_GOTHIC_14
 #endif
 
 #define MAP_BUFFER_SIZE (MAP_WIDTH * MAP_HEIGHT)
@@ -68,6 +78,7 @@ static bool s_off_route = false;
 static bool s_recording_active = false;
 static int s_nav_bearing = -1; // -1 = no instruction, 0 = straight, 90 = right, 180 = uturn, 270 = left
 static bool s_is_english = false;
+static int s_active_count = 0;
 static void update_ui_languages(void);
 static void layout_dashboard(void);
 static void update_time_and_duration(void);
@@ -101,20 +112,20 @@ static GPath *s_arrow_inner_path = NULL;
 static const GPathInfo ARROW_OUTER_PATH_INFO = {
   .num_points = 4,
   .points = (GPoint []) {
-    {0, -15},
-    {10, 12},
-    {0, 6},
-    {-10, 12}
+    {0, -20},
+    {15, 17},
+    {0, 11},
+    {-15, 17}
   }
 };
 
 static const GPathInfo ARROW_INNER_PATH_INFO = {
   .num_points = 4,
   .points = (GPoint []) {
-    {0, -12},
-    {8, 10},
-    {0, 5},
-    {-8, 10}
+    {0, -17},
+    {13, 15},
+    {0, 10},
+    {-13, 15}
   }
 };
 
@@ -186,7 +197,7 @@ static uint32_t s_expected_chunks = 0;
 
 static char s_distance_text[16] = "---";
 static char s_instruction_text[64] = "Warte auf GPS...";
-static char s_avg_speed_text[16] = "0.0 km/h";
+static char s_avg_speed_text[16] = "0.0";
 static char s_elevation_gain_text[16] = "0m";
 static char s_elevation_loss_text[16] = "0m";
 static char s_trip_distance_text[16] = "0.00 km";
@@ -273,7 +284,7 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   static char zoom_buf[8];
   snprintf(zoom_buf, sizeof(zoom_buf), "Z:%d", s_zoom_level);
   graphics_context_set_text_color(ctx, GColorBlack);
-  graphics_draw_text(ctx, zoom_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+  graphics_draw_text(ctx, zoom_buf, fonts_get_system_font(FONT_HEADER),
                      GRect(bounds.size.w - 35, 2, 30, 20),
                      GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
   
@@ -281,7 +292,7 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   BatteryChargeState battery = battery_state_service_peek();
   static char battery_buf[8];
   snprintf(battery_buf, sizeof(battery_buf), "%d%%", battery.charge_percent);
-  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_HEADER),
                      GRect(bounds.size.w - 75, 2, 35, 20),
                      GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
   
@@ -291,12 +302,15 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   } else {
     graphics_context_set_fill_color(ctx, GColorRed);
   }
-  graphics_fill_rect(ctx, GRect(bounds.size.w - 87, 8, 6, 6), 3, GCornersAll);
+  graphics_fill_circle(ctx, GPoint(bounds.size.w - 87,15), 6);
   
   // Draw Recording Status dot
   if (s_recording_active) {
     graphics_context_set_fill_color(ctx, GColorRed);
-    graphics_fill_rect(ctx, GRect(bounds.size.w - 102, 8, 6, 6), 3, GCornersAll);
+    graphics_fill_circle(ctx, GPoint(bounds.size.w - 102,15), 6);
+  } else {
+    graphics_context_set_stroke_color(ctx, GColorRed);
+    graphics_draw_circle(ctx, GPoint(bounds.size.w - 102,15), 6);
   }
 #elif defined(PBL_PLATFORM_CHALK)
   // Hide Zoom
@@ -304,7 +318,7 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   static char battery_buf[8];
   snprintf(battery_buf, sizeof(battery_buf), "%d%%", battery.charge_percent);
   graphics_context_set_text_color(ctx, GColorBlack);
-  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_HEADER),
                      GRect(125, 6, 30, 20),
                      GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
                      
@@ -314,12 +328,15 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   } else {
     graphics_context_set_fill_color(ctx, GColorRed);
   }
-  graphics_fill_rect(ctx, GRect(115, 12, 6, 6), 3, GCornersAll);
+  graphics_fill_circle(ctx, GPoint(115,15), 6);
   
   // Draw Recording Status dot
   if (s_recording_active) {
     graphics_context_set_fill_color(ctx, GColorRed);
-    graphics_fill_rect(ctx, GRect(105, 12, 6, 6), 3, GCornersAll);
+    graphics_fill_circle(ctx, GPoint(100,15), 6);
+  } else {
+    graphics_context_set_stroke_color(ctx, GColorRed);
+    graphics_draw_circle(ctx, GPoint(100,15), 6);
   }
 #else
   // On Basalt/Aplite (144px): Hide Zoom from header to save space
@@ -327,7 +344,7 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   static char battery_buf[8];
   snprintf(battery_buf, sizeof(battery_buf), "%d%%", battery.charge_percent);
   graphics_context_set_text_color(ctx, GColorBlack);
-  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+  graphics_draw_text(ctx, battery_buf, fonts_get_system_font(FONT_HEADER),
                      GRect(bounds.size.w - 35, 2, 30, 20),
                      GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
                      
@@ -337,12 +354,15 @@ static void header_update_proc(Layer *layer, GContext *ctx) {
   } else {
     graphics_context_set_fill_color(ctx, GColorRed);
   }
-  graphics_fill_rect(ctx, GRect(bounds.size.w - 47, 8, 6, 6), 3, GCornersAll);
+  graphics_fill_circle(ctx, GPoint(bounds.size.w - 47,15), 6);
   
   // Draw Recording Status dot
   if (s_recording_active) {
     graphics_context_set_fill_color(ctx, GColorRed);
-    graphics_fill_rect(ctx, GRect(bounds.size.w - 62, 8, 6, 6), 3, GCornersAll);
+    graphics_fill_circle(ctx, GPoint(bounds.size.w - 62,15), 6);
+  } else {
+    graphics_context_set_stroke_color(ctx, GColorRed);
+    graphics_draw_circle(ctx, GPoint(bounds.size.w - 62,15), 6);
   }
 #endif
   
@@ -421,12 +441,12 @@ static void map_layer_update_proc(Layer *layer, GContext *ctx) {
       
       gpath_rotate_to(s_arrow_outer_path, angle);
       gpath_move_to(s_arrow_outer_path, center);
-      graphics_context_set_fill_color(ctx, GColorWhite);
+      graphics_context_set_fill_color(ctx, GColorYellow);
       gpath_draw_filled(ctx, s_arrow_outer_path);
       
       gpath_rotate_to(s_arrow_inner_path, angle);
       gpath_move_to(s_arrow_inner_path, center);
-      graphics_context_set_fill_color(ctx, GColorBlue);
+      graphics_context_set_fill_color(ctx, GColorOrange);
       gpath_draw_filled(ctx, s_arrow_inner_path);
     }
   } else {
@@ -454,18 +474,18 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorClear);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   
-  int active_count = 0;
+  s_active_count = 0;
   for(int i = 0; i < 10; i++) {
     if ((s_dashboard_fields & (1 << i)) != 0) {
-      active_count++;
+      s_active_count++;
     }
   }
 
-  if (active_count <= 1) return;
+  if (s_active_count <= 1) return;
   
   int rows = 1, cols = 1;
-  if (active_count == 2) { rows = 2; cols = 1; }
-  else if (active_count == 3 || active_count == 4) { rows = 2; cols = 2; }
+  if (s_active_count == 2) { rows = 2; cols = 1; }
+  else if (s_active_count == 3 || s_active_count == 4) { rows = 2; cols = 2; }
   
   int coords_h = 36;
   int dynamic_h = bounds.size.h - coords_h;
@@ -483,7 +503,7 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   // Vertical lines
   if (cols > 1) {
     int v_line_end = dynamic_h;
-    if (active_count == 3) {
+    if (s_active_count == 3) {
       v_line_end = row_h; // Only first row has 2 cols
     }
     graphics_draw_line(ctx, GPoint(bounds.size.w / 2, 5), GPoint(bounds.size.w / 2, v_line_end));
@@ -616,6 +636,17 @@ static void big_nav_update_proc(Layer *layer, GContext *ctx) {
                      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
+void SpaceOrNewline(char* str) {
+  if ( s_active_count > 2 )
+  {
+    char *slash = strstr(str, " ");
+    if (slash) {
+      slash[0] = '\n';
+    }
+  }
+}
+
+
 // AppMessage Callback Handlers
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *lang_tuple = dict_find(iter, MESSAGE_KEY_LANGUAGE);
@@ -690,9 +721,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
         layer_set_hidden(s_big_nav_layer, s_show_dashboard ? true : !s_big_nav_active);
         if (s_big_nav_active) {
           layer_mark_dirty(s_big_nav_layer);
-          if (s_nav_view_mode != 2) {
-            vibes_short_pulse(); // Vibrate when auto-popup appears, but not if it's permanently on
-          }
+          // Interferes with the vibrate for left / right and is thus also useless?
+          // if (s_nav_view_mode != 2) {
+          //   vibes_short_pulse(); // Vibrate when auto-popup appears, but not if it's permanently on
+          // }
         }
       }
     }
@@ -798,28 +830,21 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *gain_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_GAIN);
   if(gain_tuple && s_dash_gain_val_layer) {
     snprintf(s_elevation_gain_text, sizeof(s_elevation_gain_text), "%s", gain_tuple->value->cstring);
-    char *slash = strstr(s_elevation_gain_text, " / ");
-    if (slash) {
-      slash[0] = '\n';
-      memmove(slash + 1, slash + 3, strlen(slash + 3) + 1);
-    }
+    SpaceOrNewline(s_elevation_gain_text);
     text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
   }
 
   Tuple *loss_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_LOSS);
   if(loss_tuple && s_dash_loss_val_layer) {
     snprintf(s_elevation_loss_text, sizeof(s_elevation_loss_text), "%s", loss_tuple->value->cstring);
-    char *slash = strstr(s_elevation_loss_text, " / ");
-    if (slash) {
-      slash[0] = '\n';
-      memmove(slash + 1, slash + 3, strlen(slash + 3) + 1);
-    }
+    SpaceOrNewline(s_elevation_loss_text);
     text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
   }
   
   Tuple *trip_dist_tuple = dict_find(iter, MESSAGE_KEY_TRIP_DISTANCE);
   if (trip_dist_tuple && s_dash_dist_val_layer) {
     snprintf(s_trip_distance_text, sizeof(s_trip_distance_text), "%s", trip_dist_tuple->value->cstring);
+    SpaceOrNewline(s_trip_distance_text);
     text_layer_set_text(s_dash_dist_val_layer, s_trip_distance_text);
   }
   Tuple *coords_tuple = dict_find(iter, MESSAGE_KEY_GPS_COORDS);
@@ -1002,8 +1027,8 @@ static void layout_dashboard(void) {
   int row_h = dynamic_h / rows;
   int col_w = bounds.size.w / cols;
   
-  const char* val_font = FONT_KEY_GOTHIC_28_BOLD;
-  if (cols == 2) val_font = FONT_KEY_GOTHIC_24_BOLD;
+  const char* val_font = FONT_ONE_COL;
+  if (cols == 2) val_font = FONT_TWO_COL;
 
   int current_idx = 0;
   for(int i = 0; i < 10; i++) {
@@ -1024,12 +1049,12 @@ static void layout_dashboard(void) {
     layer_set_frame(text_layer_get_layer(t_layers[i]), GRect(x + 2, y + 2, w - 4, 16));
     layer_set_frame(text_layer_get_layer(v_layers[i]), GRect(x + 2, y + 18, w - 4, row_h - 18));
     
-    const char* current_font = val_font;
-    if (cols == 2 && (i == 2 || i == 3)) { // Gain or Loss
-      current_font = FONT_KEY_GOTHIC_18_BOLD;
-    }
+    // const char* current_font = val_font;
+    // if (cols == 2 && (i == 2 || i == 3)) { // Gain or Loss
+    //   current_font = FONT_KEY_GOTHIC_18_BOLD;
+    // }
     
-    text_layer_set_font(v_layers[i], fonts_get_system_font(current_font));
+    text_layer_set_font(v_layers[i], fonts_get_system_font(val_font));
     
     current_idx++;
   }
