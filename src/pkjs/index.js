@@ -9,6 +9,7 @@ var CHUNK_SIZE = 3000;
 var gpsInterval = 5;
 var gpxTrack = [];
 var currentLocation = null;
+var currentLL = null;
 var currentZoom = 17;
 var isSendingMap = false;
 var gpsWatchId = null;
@@ -810,6 +811,7 @@ function onGPSSuccess(position) {
     speed: currentSpeed,
     altitude: position.coords.altitude || 0
   };
+  currentLL = new LatLon(lat, lon);
   
   // Record coordinates walked during navigation/tracking (10m threshold)
   if (isNavigating) {
@@ -906,47 +908,36 @@ function updateWatchNavigationAndMap() {
   var vibrateAlert = 0;
 
   if (gpxTrack.length > 0) {
+    var trackLengthMinusOne = gpxTrack.length - 1;
     // 1. Find the closest point on the track
     var minDist = Infinity;
-    var closestIdx = -1;
+    var closestIdx = 0;
     
-    // ToDo: Error: This will take either the point you just passed or the pointe you're heading to
-    // or even a point on a parallel road which happens to currently be closes to you but currently totally not
-    // relevant. Which makes the upcoming calculations largely incorrect.
-    // For finding the next turn, it apparently expects closestIdx to be the last point you passed.
-    // For distance to turn it seems to expect the upcoming point.
-    // The drawing routine draws the line from cosestIdx to the next as first 'red' line. So I would say this also
-    // expects it to be the last point you passed.
-    // Fix: Either take the traveling direction into account and use the distance to the line between two points (best)
-    //      or try to keep track off the last point you passed.
-
     // Get the section we're on. closestIdx is the start of that section (which we already passed).
-    var curLoc = new LatLon(currentLocation.lat, currentLocation.lon);
-    for (var k = 0; k < gpxTrack.length - 1; k++) {
-      var d = Math.abs(curLoc.crossTrackDistanceTo(new LatLon(gpxTrack[k].lat, gpxTrack[k].lon), new LatLon(gpxTrack[k+1].lat, gpxTrack[k+1].lon)));
-      if (d < minDist) {
-        minDist = d;
-        closestIdx = k;
+    var p1 = new LatLon(gpxTrack[0].lat, gpxTrack[0].lon);
+    for (var k = 1; k < gpxTrack.length; k++) {
+      var p2 = new LatLon(gpxTrack[k].lat, gpxTrack[k].lon);
+      var distanceToLine = Math.abs(currentLL.crossTrackDistanceTo(p1, p2));
+      if (distanceToLine < minDist && currentLL.alongTrackDistanceTo(p1, p2) < p1.distanceTo(p2) ) {
+        minDist = distanceToLine;
+        closestIdx = k - 1;
+        console.log(k - 1, minDist, gpxTrack[k].lat, gpxTrack[k].lon, gpxTrack[k+1].lat, gpxTrack[k+1].lon);
       }
+      p1 = p2;
     }
     
     // Save closest index for map rendering (gray out walked part)
     closestTrackPointIdx = closestIdx;
     localStorage.setItem('closestTrackPointIdx', closestTrackPointIdx);
     
-    // Calculate walked and remaining distance along the track
-
-    // ToDo: Calculate the distance between the previous point and the current location and the next point
-    // and the current location and take this into account for walked / remaining.
-    // There can be quite some meters between two points.
-
+    // Calculate the distance traveled and remaining distance. Divide the current section based on the current location. yy
     var walkedDist = 0;
-    for (var i = 0; i < closestIdx; i++) {
+    for (var i = 0; i < closestIdx - 1; i++) {
       walkedDist += haversineDistance(gpxTrack[i].lat, gpxTrack[i].lon, gpxTrack[i + 1].lat, gpxTrack[i + 1].lon);
     }
-
-    var remDist = 0;
-    for (var j = closestIdx; j < gpxTrack.length - 1; j++) {
+    walkedDist += haversineDistance(gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon, currentLocation.lat, currentLocation.lon);
+    var remDist = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx + 1].lat, gpxTrack[closestIdx + 1].lon);
+    for (var j = closestIdx + 1; j < trackLengthMinusOne; j++) {
       remDist += haversineDistance(gpxTrack[j].lat, gpxTrack[j].lon, gpxTrack[j + 1].lat, gpxTrack[j + 1].lon);
     }
     payload.TRIP_DISTANCE = (walkedDist / 1000).toFixed(1) + ' ' + (remDist / 1000).toFixed(1);
@@ -964,7 +955,7 @@ function updateWatchNavigationAndMap() {
     
     var gainRemaining = 0;
     var lossRemaining = 0;
-    for (var i = closestIdx; i < gpxTrack.length - 1; i++) {
+    for (var i = closestIdx; i < trackLengthMinusOne; i++) {
       if (gpxTrack[i].ele !== undefined && gpxTrack[i+1].ele !== undefined) {
         var diff = gpxTrack[i+1].ele - gpxTrack[i].ele;
         if (diff > 0) gainRemaining += diff;
@@ -976,8 +967,6 @@ function updateWatchNavigationAndMap() {
     payload.ELEVATION_LOSS = Math.round(lossMade) + ' ' + Math.round(lossRemaining);
     
     // Check if user is Off-Route (> 50 meters)
-// ToDo: Error: The fact I'm > 50 meters from the closest point does not mean I'm also > 50 meters
-    // from the line between those points. So I'm not necessarily off-route.
     if (minDist > 50) {
       offRoute = true;
       payload.OFF_ROUTE = 1;
@@ -996,35 +985,30 @@ function updateWatchNavigationAndMap() {
       
       // 2. Look ahead for significant turns
       var turnIdx = -1;
-      var distToTurn = 0;
+      var distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx + 1].lat, gpxTrack[closestIdx + 1].lon);;;
       var turnBearingDiff = 0;
       
-      // Check all remaining trackpoints for bearing changes
-      var lookAheadLimit = gpxTrack.length - 2;
-      for (var idx = closestIdx; idx < lookAheadLimit; idx++) {
-        var b1 = getBearing(gpxTrack[idx].lat, gpxTrack[idx].lon, gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon);
-        var b2 = getBearing(gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon, gpxTrack[idx + 2].lat, gpxTrack[idx + 2].lon);
-        
-        var diff = (b2 - b1 + 180) % 360 - 180; // diff in [-180, 180]
+      // Check all remaining trackpoints for bearing changes and measure the distance to the first significant change.
+      var previousBearing = getBearing(gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon, gpxTrack[closestIdx + 1].lat, gpxTrack[closestIdx + 1].lon);
+      for (var idx = closestIdx + 1; idx < trackLengthMinusOne; idx++) {
+        var nextBearing = getBearing(gpxTrack[idx].lat, gpxTrack[idx].lon, gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon);
+        var diff = (nextBearing - previousBearing + 180) % 360 - 180; // diff in [-180, 180]
         if (Math.abs(diff) > 30) {
-          turnIdx = idx + 1;
+          turnIdx = idx;
           turnBearingDiff = diff;
           break;
         }
+        distToTurn += haversineDistance(gpxTrack[idx].lat, gpxTrack[idx].lon, gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon);;;
+        previousBaring = nextBearing;
+      }
+
+      if (distToTurn > 1000) {
+         payload.NAV_DISTANCE = (distToTurn / 1000).toFixed(1) + 'km';
+      } else {
+         payload.NAV_DISTANCE = Math.round(distToTurn) + 'm';
       }
 
       if (turnIdx !== -1) {
-        // Accumulate distance along the path
-        distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon);
-        for (var i = closestIdx; i < turnIdx; i++) {
-           distToTurn += haversineDistance(gpxTrack[i].lat, gpxTrack[i].lon, gpxTrack[i+1].lat, gpxTrack[i+1].lon);
-        }
-        
-        if (distToTurn > 1000) {
-           payload.NAV_DISTANCE = (distToTurn / 1000).toFixed(1) + 'km';
-        } else {
-           payload.NAV_DISTANCE = Math.round(distToTurn) + 'm';
-        }
         
         // Formulate instruction text
         var dirText = '';
@@ -1053,13 +1037,8 @@ function updateWatchNavigationAndMap() {
           payload.NAV_POPUP_STATE = 0;
         }
       } else {
-        // No more sharp turns. Calculate distance to end of route.
-        distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon);
-        for (var j = closestIdx; j < gpxTrack.length - 1; j++) {
-           distToTurn += haversineDistance(gpxTrack[j].lat, gpxTrack[j].lon, gpxTrack[j+1].lat, gpxTrack[j+1].lon);
-        }
-        
-        payload.NAV_INSTRUCTION = isEnglish ? 'Go straight' : 'Gerade aus';
+        // No more sharp turns.
+        payload.NAV_INSTRUCTION = (isEnglish ? 'Straight for ' : 'Gerade aus ') + payload.NAV_DISTANCE;
         payload.NAV_BEARING = 0; // straight
         payload.NAV_POPUP_STATE = 0;
       }
