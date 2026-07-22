@@ -918,10 +918,12 @@ function updateWatchNavigationAndMap() {
     for (var k = 1; k < gpxTrack.length; k++) {
       var p2 = new LatLon(gpxTrack[k].lat, gpxTrack[k].lon);
       var distanceToLine = Math.abs(currentLL.crossTrackDistanceTo(p1, p2));
-      if (distanceToLine < minDist && currentLL.alongTrackDistanceTo(p1, p2) < p1.distanceTo(p2) ) {
-        minDist = distanceToLine;
-        closestIdx = k - 1;
-        console.log(k - 1, minDist, gpxTrack[k].lat, gpxTrack[k].lon, gpxTrack[k+1].lat, gpxTrack[k+1].lon);
+      if (distanceToLine < minDist ) {
+        var along = currentLL.alongTrackDistanceTo(p1, p2);
+        if ( along > 0 && along < sectionLength ) {
+          minDist = distanceToLine;
+          closestIdx = k - 1;
+        }
       }
       p1 = p2;
     }
