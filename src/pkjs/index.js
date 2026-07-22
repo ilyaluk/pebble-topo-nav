@@ -910,19 +910,31 @@ function updateWatchNavigationAndMap() {
   if (gpxTrack.length > 0) {
     var trackLengthMinusOne = gpxTrack.length - 1;
     // 1. Find the closest point on the track
-    var minDist = Infinity;
-    var closestIdx = 0;
     
     // Get the section we're on. closestIdx is the start of that section (which we already passed).
     var p1 = new LatLon(gpxTrack[0].lat, gpxTrack[0].lon);
+    var minDist = currentLL.distanceTo(p1);
+    var closestIdx = 0;
     for (var k = 1; k < gpxTrack.length; k++) {
       var p2 = new LatLon(gpxTrack[k].lat, gpxTrack[k].lon);
+
+      // Are we close to a point?
+      var distanceToPoint = currentLL.distanceTo(p2);
+      if ( distanceToPoint < minDist ) {
+        minDist = distanceToPoint;
+        closestIdx = k;
+        //console.log("Point", k, minDist);
+      }
+
+      // Are we close to a line / section?
       var distanceToLine = Math.abs(currentLL.crossTrackDistanceTo(p1, p2));
+      var sectionLength = p1.distanceTo(p2);
       if (distanceToLine < minDist ) {
         var along = currentLL.alongTrackDistanceTo(p1, p2);
         if ( along > 0 && along < sectionLength ) {
           minDist = distanceToLine;
           closestIdx = k - 1;
+          //console.log("Section", k-1, minDist);
         }
       }
       p1 = p2;
