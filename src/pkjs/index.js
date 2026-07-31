@@ -1,4 +1,4 @@
-var LatLon = require('./latlon-spherical.js');
+var LatLon = require('geodesy/latlon-spherical.js');
 var png = require('./png');
 var graphics = require('./graphics');
 var MAP_WIDTH = 200;
