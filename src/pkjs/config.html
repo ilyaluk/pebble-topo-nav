@@ -250,7 +250,7 @@
     <label for="map-source" id="label-map-source" style="margin-top: 15px;">Kartenquelle / Map Source</label>
     <select id="map-source">
       <option value="opentopomap" selected>OpenTopoMap (Topografisch, Standard)</option>
-      <option value="hikebikemap">HikeBikeMap (Kontrastreich, Outdoor)</option>
+      <option value="cyclosm">CyclOSM (Outdoor, Wander- & Radwege)</option>
       <option value="mtbmap">MtbMap (Wander- & Radwege)</option>
       <option value="osm">OpenStreetMap Standard (Schnell / Klares Design)</option>
     </select>
@@ -433,7 +433,7 @@
       activeLabel: "Aktiv",
       mapSourceLabel: "Kartenquelle",
       mapOpenTopoMap: "OpenTopoMap (Topografisch, Standard)",
-      mapHikeBikeMap: "HikeBikeMap (Kontrastreich, Outdoor)",
+      mapCyclOSM: "CyclOSM (Outdoor, Wander- & Radwege)",
       mapMtbMap: "MtbMap (Wander- & Radwege)",
       mapOsm: "OpenStreetMap Standard (Schnell / Klares Design)",
       fullscreenLabel: "Vollbild-Modus (Karte)",
@@ -496,7 +496,7 @@
       activeLabel: "Active",
       mapSourceLabel: "Map Source",
       mapOpenTopoMap: "OpenTopoMap (Topographic, Default)",
-      mapHikeBikeMap: "HikeBikeMap (High-contrast Outdoor)",
+      mapCyclOSM: "CyclOSM (Outdoor, Hiking & Cycling)",
       mapMtbMap: "MtbMap (High-contrast Trails)",
       mapOsm: "OpenStreetMap Standard (Fast / Clean)",
       fullscreenLabel: "Fullscreen Mode (Map)",
@@ -553,7 +553,7 @@
     document.getElementById("label-map-source").innerText = t.mapSourceLabel;
     var mapSourceSelect = document.getElementById("map-source");
     mapSourceSelect.options[0].text = t.mapOpenTopoMap;
-    mapSourceSelect.options[1].text = t.mapHikeBikeMap;
+    mapSourceSelect.options[1].text = t.mapCyclOSM;
     mapSourceSelect.options[2].text = t.mapMtbMap;
     mapSourceSelect.options[3].text = t.mapOsm;
 
@@ -1230,10 +1230,10 @@
   var leafletMapInstance = null;
 
   function getLeafletTileUrl(mapSource) {
-    if (mapSource === 'hikebikemap') {
-      return 'https://tiles.wmflabs.org/hikebike/{z}/{x}/{y}.png';
+    if (mapSource === 'cyclosm' || mapSource === 'hikebikemap') {
+      return 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
     } else if (mapSource === 'mtbmap') {
-      return 'http://tile.mtbmap.cz/mtbmap_tiles/{z}/{x}/{y}.png';
+      return 'https://tile.mtbmap.cz/mtbmap_tiles/{z}/{x}/{y}.png';
     } else if (mapSource === 'osm') {
       return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     } else { // opentopomap
