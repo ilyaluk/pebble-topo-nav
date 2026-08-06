@@ -103,10 +103,14 @@ function getTileUrl(z, x, y) {
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
   var subdomains, sub;
   
-  if (mapSource === 'hikebikemap') {
-    return 'https://tiles.wmflabs.org/hikebike/' + z + '/' + x + '/' + y + '.png';
+  // 'hikebikemap' kept as a legacy alias: the old tiles.wmflabs.org server was
+  // decommissioned by Wikimedia, so previously-saved settings now resolve to CyclOSM.
+  if (mapSource === 'cyclosm' || mapSource === 'hikebikemap') {
+    subdomains = ['a', 'b', 'c'];
+    sub = subdomains[Math.floor(Math.random() * 3)];
+    return 'https://' + sub + '.tile-cyclosm.openstreetmap.fr/cyclosm/' + z + '/' + x + '/' + y + '.png';
   } else if (mapSource === 'mtbmap') {
-    return 'http://tile.mtbmap.cz/mtbmap_tiles/' + z + '/' + x + '/' + y + '.png';
+    return 'https://tile.mtbmap.cz/mtbmap_tiles/' + z + '/' + x + '/' + y + '.png';
   } else if (mapSource === 'osm') {
     subdomains = ['a', 'b', 'c'];
     sub = subdomains[Math.floor(Math.random() * 3)];
