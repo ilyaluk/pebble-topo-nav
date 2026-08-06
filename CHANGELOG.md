@@ -2,8 +2,15 @@
 
 ## [2.8.0] - 2026-08-05
 
+### Changed
+- **UI & Navigation Updates (by @patrickvbe):** 
+  - **Dashboard & Layout Polish:** Introduced dynamic font scaling in the dashboard based on the number of items. Improved readability for battery and zoom fields, refined the distance formatting, and made the track recording indicator more distinct (open circle when not recording).
+  - **Navigation Feedback:** The directional text in the footer now includes the exact distance. The big pop-up arrow behavior has been synced with the turn vibration to prevent overlapping alerts, and its on-map color and size have been tweaked for better contrast.
+
 ### Fixed
-- **Map Sources Rendering White (HikeBikeMap & MtbMap):** Fixed two map sources that displayed a blank white background instead of tiles.
+- **GPS Precision (by @patrickvbe):** Fixed the nearest point and section detection logic. This eliminates false "off-track" warnings and correctly calculates traveled vs. remaining distances on very long track sections.
+- **Battery Optimizations (by @patrickvbe):** The app now strictly obeys the configured `gpsInterval` setting to skip overly frequent GPS polling, preserving both watch and phone battery life.
+- **Map Sources Rendering White (by @ChrisBoomhower):** Fixed two map sources that displayed a blank white background instead of tiles.
   - **HikeBikeMap → CyclOSM:** The HikeBikeMap tile server (`tiles.wmflabs.org`) was decommissioned by the Wikimedia Foundation and no longer resolves, so the source never returned tiles. Replaced it with **CyclOSM** (`tile-cyclosm.openstreetmap.fr`), a live, free, HTTPS outdoor/hiking-and-cycling basemap with global coverage, and renamed the settings dropdown option accordingly (English & German). Previously-saved `hikebikemap` selections are transparently aliased to CyclOSM so existing users are not reset.
   - **MtbMap over HTTPS:** The MtbMap URL used cleartext `http://`, which is blocked by mobile WebViews / PebbleKit JS (iOS ATS, Android cleartext restrictions). Switched to `https://` (the server already supports it). Note: MtbMap's tile coverage is Europe-only, so it will still render blank in regions without data (e.g. North America) — this is a data-coverage limitation of the source, not a bug.
 - Applied the same fixes to the Leaflet map preview in the settings page (`getLeafletTileUrl`) so the in-settings preview matches what the watch renders.
