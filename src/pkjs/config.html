@@ -329,6 +329,10 @@
     <label for="gpx-text" id="label-method-b">GPX-Inhalt kopieren & einfügen (XML)</label>
     <textarea id="gpx-text" placeholder="Öffne die .gpx Datei in einer Text-App auf deinem Handy, kopiere den gesamten XML-Inhalt und füge ihn hier ein..." rows="6" style="width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 12px; border-radius: 8px; font-size: 13px; box-sizing: border-box; outline: none; resize: vertical; font-family: monospace; margin-top: 5px;"></textarea>
     
+    <input type="file" id="gpx-file-input" accept=".gpx,application/gpx+xml" style="display: none;">
+    <button id="gpx-file-btn" class="btn" style="background-color: #3e3e3e; margin-top: 10px; font-size: 14px; padding: 8px 12px; border: 1px solid var(--border-color); color: var(--text-color);">GPX Datei auswählen (Experimentell)</button>
+    <div id="gpx-file-status" style="font-size: 12px; color: var(--text-muted); margin-top: 5px;"></div>
+    
     <label for="route-name-input" id="label-route-name" style="margin-top: 15px;">Name der Route (optional)</label>
     <input type="text" id="route-name-input" placeholder="z.B. Harz Wanderung" style="width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 10px; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; margin-top: 5px; margin-bottom: 10px;">
 
@@ -608,9 +612,49 @@
 
   // UI elements
   var gpxTextArea = document.getElementById("gpx-text");
+  var gpxFileInput = document.getElementById("gpx-file-input");
+  var gpxFileBtn = document.getElementById("gpx-file-btn");
+  var gpxFileStatus = document.getElementById("gpx-file-status");
   var clearBtn = document.getElementById("clear-btn");
   var statusMsg = document.getElementById("status-msg");
   var saveBtn = document.getElementById("save-btn");
+
+  // Handle file picker button click
+  gpxFileBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    gpxFileInput.click();
+  });
+
+  // Handle file selection
+  gpxFileInput.addEventListener("change", function(e) {
+    var lang = getActiveLang();
+    var file = e.target.files[0];
+    if (!file) return;
+
+    // 2MB limit
+    if (file.size > 2 * 1024 * 1024) {
+      alert(lang === "de" ? "Die Datei ist zu groß (max. 2MB erlaubt)." : "File is too large (max 2MB allowed).");
+      gpxFileInput.value = "";
+      return;
+    }
+
+    gpxFileStatus.innerText = (lang === "de" ? "Lade Datei: " : "Loading file: ") + file.name + "...";
+    
+    var reader = new FileReader();
+    reader.onload = function(evt) {
+      var content = evt.target.result;
+      gpxTextArea.value = content;
+      // Trigger the existing input listener manually
+      var event = new Event('input', { bubbles: true });
+      gpxTextArea.dispatchEvent(event);
+      gpxFileStatus.innerText = (lang === "de" ? "Datei geladen: " : "File loaded: ") + file.name;
+    };
+    reader.onerror = function() {
+      alert(lang === "de" ? "Fehler beim Lesen der Datei." : "Error reading file.");
+      gpxFileStatus.innerText = "";
+    };
+    reader.readAsText(file);
+  });
 
   // Listen to input changes in the fallback textarea
   gpxTextArea.addEventListener("input", function() {

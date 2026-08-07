@@ -6,7 +6,7 @@
 > **This is a Vibe-Coding project! 🎸✨**
 > Built interactively using advanced agentic AI pair-programming to prototype, test, and implement features on-the-fly.
 
-TopoNav brings full topographic map navigation, GPX route guidance, and workout tracking directly to your wrist. Compatible with all Pebble platforms (including Pebble Time 2/`emery` and Pebble Round/`chalk`), it works by companion-stitching live OpenTopoMap tiles, rendering colored route paths, and utilizing sensor-fused compass/GPS headings.
+TopoNav brings full topographic map navigation, GPX route guidance, and workout tracking directly to your wrist. Compatible with all Pebble platforms (including Pebble Time 2/`emery` and Pebble Round/`chalk`), it works by companion-stitching live outdoor map tiles (e.g., OpenTopoMap, CyclOSM), rendering colored route paths, and utilizing sensor-fused compass/GPS headings.
 
 ![TopoNav Banner](images/appstore_banner.png)
 
@@ -73,7 +73,7 @@ graph TD
 
 2. **Phone Companion (`src/pkjs/`)**:
    * **`index.js`**: Orchestrates state synchronization, listens to GPS updates, buffers logs in `localStorage` for crash/app-exit persistence, and feeds metadata (next-turn arrow, remaining distance, elevation stats) to the watch.
-   * **`graphics.js`**: Calculates Web Mercator projection bounds, downloads OpenTopoMap tiles, renders GPX track segments (grey for walked, vibrant orange `#FF3C00` for upcoming path, 5px width), draws current viewport offsets, and maps color values down to GColor8.
+   * **`graphics.js`**: Calculates Web Mercator projection bounds, downloads outdoor map tiles (e.g., OpenTopoMap, CyclOSM), renders GPX track segments (grey for walked, vibrant orange `#FF3C00` for upcoming path, 5px width), draws current viewport offsets, and maps color values down to GColor8.
    * **`png.js`**: A lightweight PNG decoder featuring a custom Huffman-Inflate algorithm. PebbleKit JS has no access to Node.js libraries or Canvas, so PNGs are decoded directly in pure JS.
    * **`config.html`**: A clay-based HTML settings page. Features Douglas-Peucker path simplification (reducing GPX sizes before syncing to the watch), route-naming controls, and GPX download options for recorded walks.
 
