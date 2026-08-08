@@ -48,26 +48,85 @@ var lastPositionTime = null;
 var lastPositionCoords = null;
 var closestTrackPointIdx = -1;
 
+// Base64 helpers. PebbleKit JS runs in a sandbox inside the phone's Pebble app
+// that exposes only a restricted subset of HTML5 APIs (XMLHttpRequest,
+// localStorage, geolocation, timers, logging) -- btoa/atob are not included,
+// and support differs between the iOS and Android apps. Encode/decode by hand.
+var B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+var B64_LOOKUP = (function() {
+  var lookup = {};
+  for (var i = 0; i < B64_CHARS.length; i++) {
+    lookup[B64_CHARS.charAt(i)] = i;
+  }
+  return lookup;
+})();
+
 // Utility: Convert ArrayBuffer to Base64 string
 function arrayBufferToBase64(buffer) {
-  var binary = '';
   var bytes = new Uint8Array(buffer);
-  var len = bytes.byteLength;
-  for (var i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  var len = bytes.length;
+  var parts = [];
+  var chunk = '';
+  var i;
+
+  for (i = 0; i + 2 < len; i += 3) {
+    var triplet = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    chunk +=
+      B64_CHARS.charAt((triplet >> 18) & 63) +
+      B64_CHARS.charAt((triplet >> 12) & 63) +
+      B64_CHARS.charAt((triplet >> 6) & 63) +
+      B64_CHARS.charAt(triplet & 63);
+    // Flush periodically to bound peak string size on a ~30KB tile.
+    if (chunk.length >= 8192) {
+      parts.push(chunk);
+      chunk = '';
+    }
   }
-  return btoa(binary);
+
+  // Tail: 1 or 2 leftover bytes get padded with '='
+  var remaining = len - i;
+  if (remaining === 1) {
+    chunk +=
+      B64_CHARS.charAt((bytes[i] >> 2) & 63) +
+      B64_CHARS.charAt((bytes[i] << 4) & 63) +
+      '==';
+  } else if (remaining === 2) {
+    chunk +=
+      B64_CHARS.charAt((bytes[i] >> 2) & 63) +
+      B64_CHARS.charAt(((bytes[i] << 4) | (bytes[i + 1] >> 4)) & 63) +
+      B64_CHARS.charAt((bytes[i + 1] << 2) & 63) +
+      '=';
+  }
+  parts.push(chunk);
+
+  return parts.join('');
 }
 
 // Utility: Convert Base64 string to Uint8Array
 function base64ToUint8Array(base64) {
-  var binaryString = atob(base64);
-  var len = binaryString.length;
-  var bytes = new Uint8Array(len);
+  // Tolerate padding and stray whitespace/newlines
+  var clean = base64.replace(/[\s=]/g, '');
+  var len = clean.length;
+  var outLen = Math.floor((len * 3) / 4);
+  var bytes = new Uint8Array(outLen);
+  var acc = 0;
+  var accBits = 0;
+  var outIdx = 0;
+
   for (var i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
+    var value = B64_LOOKUP[clean.charAt(i)];
+    if (value === undefined) {
+      throw new Error('Invalid base64 character at index ' + i);
+    }
+    acc = (acc << 6) | value;
+    accBits += 6;
+    if (accBits >= 8) {
+      accBits -= 8;
+      bytes[outIdx++] = (acc >> accBits) & 0xff;
+    }
   }
-  return bytes;
+
+  return outIdx === outLen ? bytes : bytes.subarray(0, outIdx);
 }
 
 // Haversine formula to compute distance in meters
