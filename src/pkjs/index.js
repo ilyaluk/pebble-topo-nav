@@ -24,6 +24,10 @@ var pendingRender = null;
 // one pixel is roughly a metre, which is well inside GPS jitter.
 var RENDER_PIXEL_THRESHOLD = 2;
 var gpsWatchId = null;
+var gpsPollTimer = null;
+// Idle cadence for one-shot fixes. Duty-cycling only beats a continuous
+// watch when the receiver gets to sleep for a long stretch between fixes.
+var IDLE_GPS_POLL_MS = 30000;
 var platform = "basalt";
 
 function updateMapDimensions() {
@@ -590,7 +594,8 @@ function startRecording() {
     RECORDING_STATE: 1,
     VIBRATE_ALERT: 1
   });
-  
+
+  restartGPSTracking(); // switch from idle polling to continuous tracking
   updateWatchNavigationAndMap();
 }
 
@@ -620,7 +625,8 @@ function stopRecording(save) {
     RECORDING_STATE: 0,
     VIBRATE_ALERT: 2
   });
-  
+
+  restartGPSTracking(); // drop back from continuous tracking to idle polling
   updateWatchNavigationAndMap();
 }
 
@@ -803,7 +809,41 @@ Pebble.addEventListener('appmessage', function(e) {
   }
 });
 
-// Restart GPS tracking with current interval
+function stopGPSTracking() {
+  if (gpsWatchId !== null) {
+    try {
+      navigator.geolocation.clearWatch(gpsWatchId);
+    } catch (e) {
+      console.warn('Error clearing watch: ' + e);
+    }
+    gpsWatchId = null;
+  }
+  if (gpsPollTimer !== null) {
+    clearInterval(gpsPollTimer);
+    gpsPollTimer = null;
+  }
+}
+
+function requestIdleFix() {
+  try {
+    navigator.geolocation.getCurrentPosition(onGPSSuccess, onGPSError, {
+      enableHighAccuracy: true,
+      // A fix almost as old as the poll period is still current enough for
+      // the idle map/dashboard, and lets the OS answer from cache for free.
+      maximumAge: IDLE_GPS_POLL_MS - 5000,
+      timeout: 20000
+    });
+  } catch (err) {
+    console.error('Error requesting position: ' + err);
+    onGPSError({ message: err.message || 'Permission/Initialization error' });
+  }
+}
+
+// While navigating, a continuous watch keeps the receiver locked so fixes
+// arrive fresh and evenly spaced -- turn alerts and off-route detection
+// depend on that. When idle there is nothing time-critical to feed, so the
+// watch is dropped entirely and a periodic one-shot request lets the phone
+// power the GPS receiver down between fixes.
 function restartGPSTracking() {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
     console.error('Navigator or Geolocation is not available.');
@@ -811,30 +851,30 @@ function restartGPSTracking() {
     return;
   }
 
-  if (gpsWatchId !== null) {
+  stopGPSTracking();
+
+  if (isNavigating) {
+    var options = {
+      enableHighAccuracy: true,
+      maximumAge: 10000, // allow cached location up to 10s old
+      timeout: 10000     // larger timeout to avoid immediate cold start failures
+    };
+
     try {
-      navigator.geolocation.clearWatch(gpsWatchId);
-    } catch (e) {
-      console.warn('Error clearing watch: ' + e);
+      gpsWatchId = navigator.geolocation.watchPosition(
+        onGPSSuccess,
+        onGPSError,
+        options
+      );
+      console.log('Continuous GPS tracking started with interval: ' + gpsInterval + 's');
+    } catch (err) {
+      console.error('Error starting watchPosition: ' + err);
+      onGPSError({ message: err.message || 'Permission/Initialization error' });
     }
-  }
-  
-  var options = {
-    enableHighAccuracy: true,
-    maximumAge: 10000, // allow cached location up to 10s old
-    timeout: 10000     // larger timeout to avoid immediate cold start failures
-  };
-  
-  try {
-    gpsWatchId = navigator.geolocation.watchPosition(
-      onGPSSuccess,
-      onGPSError,
-      options
-    );
-    console.log('GPS tracking started with interval: ' + gpsInterval + 's');
-  } catch (err) {
-    console.error('Error starting watchPosition: ' + err);
-    onGPSError({ message: err.message || 'Permission/Initialization error' });
+  } else {
+    requestIdleFix(); // immediate fix so the app is not blank until the first poll
+    gpsPollTimer = setInterval(requestIdleFix, IDLE_GPS_POLL_MS);
+    console.log('Idle GPS polling started, every ' + (IDLE_GPS_POLL_MS / 1000) + 's');
   }
 }
 
