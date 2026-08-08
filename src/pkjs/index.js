@@ -61,6 +61,12 @@ function updateMapDimensions() {
 // Navigation & Recording State
 var isNavigating = false;
 var recordedTrack = [];
+// Persistence of the recorded track is split into a base array plus a small
+// tail: appends re-serialize only the tail, and the whole track is rewritten
+// just once per TAIL_LIMIT points, so the per-point write cost stays bounded
+// as the trip grows.
+var RECORDED_TAIL_LIMIT = 40; // one full rewrite per ~400m walked
+var recordedTrackTailCount = 0;
 var currentSpeed = 0;
 var currentHeading = -1;
 
@@ -375,10 +381,19 @@ Pebble.addEventListener('ready', function() {
   if (storedRecordedTrack) {
     try {
       recordedTrack = JSON.parse(storedRecordedTrack);
-      console.log('Loaded recorded track: ' + recordedTrack.length + ' points.');
     } catch (e) {
       recordedTrack = [];
     }
+  }
+  try {
+    var storedTail = JSON.parse(localStorage.getItem('recordedTrackTail') || '[]');
+    recordedTrack = recordedTrack.concat(storedTail);
+    recordedTrackTailCount = storedTail.length;
+  } catch (e) {
+    recordedTrackTailCount = 0;
+  }
+  if (recordedTrack.length > 0) {
+    console.log('Loaded recorded track: ' + recordedTrack.length + ' points.');
   }
 
   // Load active route points if set
@@ -713,9 +728,11 @@ function deleteSavedTrip(tripId) {
 function startRecording() {
   isNavigating = true;
   localStorage.setItem('isNavigating', 'true');
-  
+
   recordedTrack = [];
-  localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
+  recordedTrackTailCount = 0;
+  localStorage.setItem('recordedTrack', '[]');
+  localStorage.setItem('recordedTrackTail', '[]');
   
   totalMovingDistance = 0;
   totalMovingTimeSec = 0;
@@ -756,8 +773,10 @@ function stopRecording(save) {
   }
   
   recordedTrack = [];
-  localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
-  
+  recordedTrackTailCount = 0;
+  localStorage.setItem('recordedTrack', '[]');
+  localStorage.setItem('recordedTrackTail', '[]');
+
   // Confirm stop with double vibe
   sendStatusMessage({
     RECORDING_STATE: 0,
@@ -1072,8 +1091,7 @@ function onGPSSuccess(position) {
       if (isNavigating) {
         totalMovingDistance += ds;
         totalMovingTimeSec += timediff;
-        localStorage.setItem('totalMovingDistance', totalMovingDistance);
-        localStorage.setItem('totalMovingTimeSec', totalMovingTimeSec);
+        // Persisted on the 10m breadcrumb cadence below
       }
     }
   }
@@ -1107,7 +1125,21 @@ function onGPSSuccess(position) {
         ele: position.coords.altitude || 0,
         time: now
       });
-      localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
+      recordedTrackTailCount++;
+      if (recordedTrackTailCount >= RECORDED_TAIL_LIMIT) {
+        // Fold the tail into the base: the one write whose cost grows with
+        // trip length, paid once per RECORDED_TAIL_LIMIT points.
+        localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
+        localStorage.setItem('recordedTrackTail', '[]');
+        recordedTrackTailCount = 0;
+      } else {
+        localStorage.setItem('recordedTrackTail',
+          JSON.stringify(recordedTrack.slice(recordedTrack.length - recordedTrackTailCount)));
+      }
+      // Piggyback the moving stats on the same cadence; a crash loses at
+      // most the last ~10m of statistics.
+      localStorage.setItem('totalMovingDistance', totalMovingDistance);
+      localStorage.setItem('totalMovingTimeSec', totalMovingTimeSec);
     }
   }
   
@@ -1222,8 +1254,10 @@ function updateWatchNavigationAndMap() {
     var closestIdx = found.closestIdx;
 
     // Save closest index for map rendering (gray out walked part)
-    closestTrackPointIdx = closestIdx;
-    localStorage.setItem('closestTrackPointIdx', closestTrackPointIdx);
+    if (closestIdx !== closestTrackPointIdx) {
+      closestTrackPointIdx = closestIdx;
+      localStorage.setItem('closestTrackPointIdx', closestTrackPointIdx);
+    }
 
     // Distance traveled and remaining, from the prefix sums
     var cumDist = trackIndex.cumDist;
