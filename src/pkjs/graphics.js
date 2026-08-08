@@ -78,6 +78,45 @@ function drawCircle(buffer, cx, cy, radius, r, g, b, borderR, borderG, borderB, 
   }
 }
 
+// Liang-Barsky clip of segment (x0,y0)-(x1,y1) against the viewport expanded
+// by `margin` px (margin must cover the brush radius so no visible brush
+// pixel is lost). Returns [x0,y0,x1,y1] of the visible part, or null when
+// the segment misses the viewport entirely; segments that cross the viewport
+// with both endpoints outside it are kept. Keeps Bresenham from walking
+// off-screen segments pixel by pixel.
+function clipSegment(x0, y0, x1, y1, margin) {
+  var xmin = -margin;
+  var ymin = -margin;
+  var xmax = MAP_WIDTH + margin;
+  var ymax = MAP_HEIGHT + margin;
+  var dx = x1 - x0;
+  var dy = y1 - y0;
+  var t0 = 0;
+  var t1 = 1;
+  var p = [-dx, dx, -dy, dy];
+  var q = [x0 - xmin, xmax - x0, y0 - ymin, ymax - y0];
+
+  for (var i = 0; i < 4; i++) {
+    if (p[i] === 0) {
+      if (q[i] < 0) return null; // parallel to and outside this edge
+    } else {
+      var t = q[i] / p[i];
+      if (p[i] < 0) {
+        if (t > t1) return null;
+        if (t > t0) t0 = t;
+      } else {
+        if (t < t0) return null;
+        if (t < t1) t1 = t;
+      }
+    }
+  }
+
+  return [
+    Math.round(x0 + t0 * dx), Math.round(y0 + t0 * dy),
+    Math.round(x0 + t1 * dx), Math.round(y0 + t1 * dy)
+  ];
+}
+
 // Bresenham's line algorithm with brush thickness
 function drawLineThick(buffer, x0, y0, x1, y1, thickness, r, g, b) {
   var dx = Math.abs(x1 - x0);
@@ -149,28 +188,23 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, close
         // Tile absolute coordinates range from [tx*256, (tx+1)*256]
         var startX = tx * 256;
         var startY = ty * 256;
-        
-        // Copy overlapping pixels
-        for (var py = 0; py < 256; py++) {
-          var worldY = startY + py;
-          var viewY = Math.floor(worldY - tlY);
-          
-          if (viewY >= 0 && viewY < MAP_HEIGHT) {
-            for (var px = 0; px < 256; px++) {
-              var worldX = startX + px;
-              var viewX = Math.floor(worldX - tlX);
-              
-              if (viewX >= 0 && viewX < MAP_WIDTH) {
-                var viewIdx = (viewY * MAP_WIDTH + viewX) * 4;
-                var tileIdx = (py * 256 + px) * 4;
-                
-                rgbaBuffer[viewIdx]     = tilePixels[tileIdx];
-                rgbaBuffer[viewIdx + 1] = tilePixels[tileIdx + 1];
-                rgbaBuffer[viewIdx + 2] = tilePixels[tileIdx + 2];
-                rgbaBuffer[viewIdx + 3] = tilePixels[tileIdx + 3];
-              }
-            }
-          }
+
+        // View coordinate of tile pixel p is floor(start + p - tl), i.e.
+        // p + (start - ceil(tl)) -- a constant shift, so the overlap is a
+        // rectangle and rows can be block-copied.
+        var baseX = startX - Math.ceil(tlX);
+        var baseY = startY - Math.ceil(tlY);
+        var pxStart = Math.max(0, -baseX);
+        var pxEnd = Math.min(256, MAP_WIDTH - baseX);
+        var pyStart = Math.max(0, -baseY);
+        var pyEnd = Math.min(256, MAP_HEIGHT - baseY);
+
+        for (var py = pyStart; py < pyEnd; py++) {
+          if (pxStart >= pxEnd) break;
+          var srcStart = (py * 256 + pxStart) * 4;
+          var srcEnd = (py * 256 + pxEnd) * 4;
+          var dstStart = ((py + baseY) * MAP_WIDTH + (pxStart + baseX)) * 4;
+          rgbaBuffer.set(tilePixels.subarray(srcStart, srcEnd), dstStart);
         }
       }
     }
@@ -199,16 +233,13 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, close
       var sy1 = Math.floor(pix1.y - tlY);
       var sx2 = Math.floor(pix2.x - tlX);
       var sy2 = Math.floor(pix2.y - tlY);
-      
-      // Bounding box clipping: discard segments where both endpoints are outside the viewport + 50px margin
-      var p1Inside = (sx1 >= -50 && sx1 <= MAP_WIDTH + 50 && sy1 >= -50 && sy1 <= MAP_HEIGHT + 50);
-      var p2Inside = (sx2 >= -50 && sx2 <= MAP_WIDTH + 50 && sy2 >= -50 && sy2 <= MAP_HEIGHT + 50);
-      
-      if (!p1Inside && !p2Inside) {
+
+      var clipped = clipSegment(sx1, sy1, sx2, sy2, 3);
+      if (!clipped) {
         continue;
       }
-      
-      drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 3, 0, 85, 255); // 3px Cobalt Blue line
+
+      drawLineThick(rgbaBuffer, clipped[0], clipped[1], clipped[2], clipped[3], 3, 0, 85, 255); // 3px Cobalt Blue line
     }
   }
   
@@ -227,12 +258,17 @@ function renderViewport(currentLat, currentLon, zoom, gpxTrack, tileCache, close
       var sy1 = Math.floor(pix1.y - tlY);
       var sx2 = Math.floor(pix2.x - tlX);
       var sy2 = Math.floor(pix2.y - tlY);
-      
+
+      var clipped = clipSegment(sx1, sy1, sx2, sy2, 4);
+      if (!clipped) {
+        continue;
+      }
+
       // Draw line. Gray out walked parts (k < closestIdx)
       if (closestIdx !== undefined && closestIdx !== null && k < closestIdx) {
-        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 5, 120, 120, 120); // 5px darker grey line
+        drawLineThick(rgbaBuffer, clipped[0], clipped[1], clipped[2], clipped[3], 5, 120, 120, 120); // 5px darker grey line
       } else {
-        drawLineThick(rgbaBuffer, sx1, sy1, sx2, sy2, 5, 255, 60, 0); // 5px bright orange line
+        drawLineThick(rgbaBuffer, clipped[0], clipped[1], clipped[2], clipped[3], 5, 255, 60, 0); // 5px bright orange line
       }
     }
   }
