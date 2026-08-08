@@ -36,6 +36,7 @@ var lastDeliveredFrameHash = null;
 var RENDER_PIXEL_THRESHOLD = 2;
 var gpsWatchId = null;
 var gpsPollTimer = null;
+var gpsErrorActive = false; // suppresses repeat GPS-error messages
 // Idle cadence for one-shot fixes. Duty-cycling only beats a continuous
 // watch when the receiver gets to sleep for a long stretch between fixes.
 var IDLE_GPS_POLL_MS = 30000;
@@ -1033,6 +1034,7 @@ function restartGPSTracking() {
 }
 
 function onGPSSuccess(position) {
+  gpsErrorActive = false;
   var now = Date.now();
   var timediff = 0.0;
   if ( lastPositionTime ) {
@@ -1122,7 +1124,15 @@ function getHeadingString(heading, isEnglish) {
 
 function onGPSError(err) {
   console.log('GPS Error: ' + err.message);
-  
+
+  // Error state is persistent on the watch until a successful fix clears
+  // it; repeated errors (a 10s timeout loop in bad signal) carry no new
+  // information and would only wake the radio.
+  if (gpsErrorActive) {
+    return;
+  }
+  gpsErrorActive = true;
+
   var isEnglish = localStorage.getItem('language') === 'en';
   var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   // Notify watch of lost connection
