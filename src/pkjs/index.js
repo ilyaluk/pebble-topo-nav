@@ -12,6 +12,17 @@ var currentLocation = null;
 var currentLL = null;
 var currentZoom = 17;
 var isSendingMap = false;
+
+// Last map image successfully transmitted to the watch, so that an unchanged
+// viewport does not get re-rendered and re-sent on every GPS fix. Holds the
+// centre in world pixels plus a signature of everything else the render
+// depends on; null means "no valid image on the watch, always redraw".
+var lastRender = null;
+var pendingRender = null;
+// A fix that moves the centre by less than this many pixels produces a
+// visually identical image, so it is not worth a 30 KB transfer. At zoom 17
+// one pixel is roughly a metre, which is well inside GPS jitter.
+var RENDER_PIXEL_THRESHOLD = 2;
 var gpsWatchId = null;
 var platform = "basalt";
 
@@ -775,6 +786,9 @@ Pebble.addEventListener('appmessage', function(e) {
   }
   
   if (dict.REQUEST_MAP_UPDATE !== undefined) {
+    // The watch asks for this when it has no image to show (app launch,
+    // window reload), so redraw even if the viewport looks unchanged.
+    invalidateLastRender();
     updateWatchNavigationAndMap();
   }
   
@@ -1145,13 +1159,48 @@ function updateWatchNavigationAndMap() {
   });
 }
 
+// Everything renderViewport() draws that is not the map centre. Any change
+// here means the image differs even if the watch has not moved.
+function getRenderSignature() {
+  return [
+    currentZoom,
+    MAP_WIDTH,
+    MAP_HEIGHT,
+    localStorage.getItem('mapSource') || 'opentopomap',
+    localStorage.getItem('showBreadcrumbs') !== 'false',
+    localStorage.getItem('activeRouteId') || '0',
+    closestTrackPointIdx,
+    gpxTrack.length,
+    recordedTrack.length
+  ].join('|');
+}
+
+// Drop the cached render so the next update redraws unconditionally. Needed
+// whenever the watch may have lost the image we think it is showing.
+function invalidateLastRender() {
+  lastRender = null;
+}
+
 // Render viewport tiles and send map image in chunks
 function renderAndSendMap() {
   if (isSendingMap || !currentLocation) return;
-  isSendingMap = true;
-  
+
   // 1. Identify which tiles are needed for the current viewport
   var centerPix = graphics.latLonToPixels(currentLocation.lat, currentLocation.lon, currentZoom);
+  var signature = getRenderSignature();
+
+  // Nothing the render depends on has changed: the watch is already showing
+  // this exact image, so skip the decode, rasterize and transfer entirely.
+  if (lastRender &&
+      lastRender.signature === signature &&
+      Math.abs(centerPix.x - lastRender.x) < RENDER_PIXEL_THRESHOLD &&
+      Math.abs(centerPix.y - lastRender.y) < RENDER_PIXEL_THRESHOLD) {
+    return;
+  }
+
+  isSendingMap = true;
+  pendingRender = { x: centerPix.x, y: centerPix.y, signature: signature };
+
   var tlX = centerPix.x - MAP_WIDTH / 2;
   var tlY = centerPix.y - MAP_HEIGHT / 2;
   var tileXMin = Math.floor(tlX / 256);
@@ -1161,12 +1210,14 @@ function renderAndSendMap() {
   
   var tileCache = {};
   var tilesToFetch = [];
+  var requiredKeys = [];
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
-  
+
   for (var tx = tileXMin; tx <= tileXMax; tx++) {
     for (var ty = tileYMin; ty <= tileYMax; ty++) {
       var key = currentZoom + '/' + tx + '/' + ty;
       var storeKey = 'tile_' + mapSource + '_' + key;
+      requiredKeys.push(key);
       var cachedBase64 = localStorage.getItem(storeKey);
       
       if (cachedBase64) {
@@ -1192,7 +1243,7 @@ function renderAndSendMap() {
     function checkCompleted() {
       fetchedCount++;
       if (fetchedCount === tilesToFetch.length) {
-        doRenderAndChunkSend(tileCache);
+        doRenderAndChunkSend(tileCache, requiredKeys);
       }
     }
     
@@ -1226,13 +1277,24 @@ function renderAndSendMap() {
       xhr.send();
     });
   } else {
-    doRenderAndChunkSend(tileCache);
+    doRenderAndChunkSend(tileCache, requiredKeys);
   }
 }
 
 // Draw route overlays and trigger the AppMessage transmission loop
-function doRenderAndChunkSend(tileCache) {
+function doRenderAndChunkSend(tileCache, requiredKeys) {
   try {
+    // A viewport drawn with tiles that failed to load is only provisional: it
+    // must not be remembered as current, or the blank patches would stick
+    // until the watch moves far enough to trigger a redraw.
+    var allTilesPresent = true;
+    for (var i = 0; i < requiredKeys.length; i++) {
+      if (!tileCache[requiredKeys[i]]) {
+        allTilesPresent = false;
+        break;
+      }
+    }
+
     var showBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
     var gcolor8Map = graphics.renderViewport(
       currentLocation.lat,
@@ -1252,6 +1314,7 @@ function doRenderAndChunkSend(tileCache) {
     function sendChunk(chunkIdx) {
       if (chunkIdx >= totalChunks) {
         console.log('Map image fully transmitted to watch!');
+        lastRender = allTilesPresent ? pendingRender : null;
         isSendingMap = false;
         return;
       }
@@ -1278,6 +1341,7 @@ function doRenderAndChunkSend(tileCache) {
             setTimeout(transmit, 150);
           } else {
             console.error('Failed transmitting map chunk ' + chunkIdx + ' after 3 retries.');
+            invalidateLastRender(); // watch holds a partial image
             isSendingMap = false;
           }
         });
@@ -1288,6 +1352,7 @@ function doRenderAndChunkSend(tileCache) {
     sendChunk(0);
   } catch (err) {
     console.error('Map rendering / transmission crashed: ' + err.stack);
+    invalidateLastRender();
     isSendingMap = false;
   }
 }
