@@ -27,6 +27,8 @@
       "MAP_DATA_CHUNK",
       "CHUNK_INDEX",
       "TOTAL_CHUNKS",
+      "MAP_ENCODING",
+      "MAP_TOTAL_BYTES",
       "NAV_INSTRUCTION",
       "NAV_DISTANCE",
       "NAV_BEARING",

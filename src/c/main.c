@@ -1,6 +1,14 @@
 #include <pebble.h>
 
-#define CHUNK_SIZE 3000
+// Must match CHUNK_SIZE in pkjs/index.js. Large chunks mean fewer AppMessage
+// wakeups per frame; aplite keeps a smaller inbox to fit its tighter RAM.
+#if defined(PBL_PLATFORM_APLITE)
+  #define CHUNK_SIZE 3000
+#else
+  #define CHUNK_SIZE 7100
+#endif
+// Dictionary overhead on top of the chunk payload (header + 4 uint tuples).
+#define INBOX_SIZE (CHUNK_SIZE + 256)
 //#define PBL_PLATFORM_EMERY
 #if defined(PBL_PLATFORM_EMERY)
   #define MAP_WIDTH 200
@@ -99,6 +107,15 @@ static uint32_t s_active_route_id = 0;
 static GBitmap *s_map_bitmap = NULL;
 static uint8_t *s_map_buffer = NULL;
 static bool s_map_ready = false;
+
+// Incoming frame staging. Chunks accumulate here and are decoded into the
+// displayed bitmap only once the frame is complete, so an aborted transfer
+// can never leave a half-old/half-new image on screen.
+#define MAP_ENCODING_RAW 0
+#define MAP_ENCODING_PACKBITS 1
+static uint8_t *s_rx_buffer = NULL;
+static uint32_t s_rx_total_bytes = 0;
+static uint8_t s_rx_encoding = MAP_ENCODING_RAW;
 
 #define PERSIST_KEY_FULLSCREEN_MODE 101
 #define PERSIST_KEY_DASHBOARD_FIELDS 102
@@ -647,6 +664,44 @@ void SpaceOrNewline(char* str) {
 }
 
 
+// PackBits-style RLE decoder (see packBitsEncode in pkjs/index.js).
+// Control byte c: c < 128 means c+1 literal bytes follow; c > 128 means the
+// next byte repeats 257-c times; 128 is a no-op. Returns true only if the
+// stream decodes to exactly dst_len bytes.
+static bool prv_packbits_decode(const uint8_t *src, uint32_t src_len,
+                                uint8_t *dst, uint32_t dst_len) {
+  uint32_t si = 0;
+  uint32_t di = 0;
+  while (si < src_len) {
+    uint8_t ctrl = src[si++];
+    if (ctrl < 128) {
+      uint32_t count = (uint32_t)ctrl + 1;
+      if (si + count > src_len || di + count > dst_len) {
+        return false;
+      }
+      memcpy(dst + di, src + si, count);
+      si += count;
+      di += count;
+    } else if (ctrl > 128) {
+      uint32_t count = 257 - (uint32_t)ctrl;
+      if (si >= src_len || di + count > dst_len) {
+        return false;
+      }
+      memset(dst + di, src[si++], count);
+      di += count;
+    }
+  }
+  return di == dst_len;
+}
+
+static void prv_free_rx_buffer(void) {
+  if (s_rx_buffer) {
+    free(s_rx_buffer);
+    s_rx_buffer = NULL;
+  }
+  s_rx_total_bytes = 0;
+}
+
 // AppMessage Callback Handlers
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *lang_tuple = dict_find(iter, MESSAGE_KEY_LANGUAGE);
@@ -884,29 +939,63 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *chunk_tuple = dict_find(iter, MESSAGE_KEY_MAP_DATA_CHUNK);
   Tuple *index_tuple = dict_find(iter, MESSAGE_KEY_CHUNK_INDEX);
   Tuple *total_tuple = dict_find(iter, MESSAGE_KEY_TOTAL_CHUNKS);
-  
-  if (chunk_tuple && index_tuple && total_tuple) {
+  Tuple *encoding_tuple = dict_find(iter, MESSAGE_KEY_MAP_ENCODING);
+  Tuple *total_bytes_tuple = dict_find(iter, MESSAGE_KEY_MAP_TOTAL_BYTES);
+
+  if (chunk_tuple && index_tuple && total_tuple && encoding_tuple && total_bytes_tuple) {
     uint32_t chunk_idx = index_tuple->value->uint32;
     uint32_t total_chunks = total_tuple->value->uint32;
     uint8_t *chunk_data = chunk_tuple->value->data;
     uint16_t chunk_len = chunk_tuple->length;
-    
-    // Clear mask on starting a new image
+    uint32_t total_bytes = total_bytes_tuple->value->uint32;
+
+    // A new frame starts: reset the mask and stage a receive buffer for it.
+    // The displayed bitmap stays untouched until the frame is complete.
     if (chunk_idx == 0) {
       s_received_chunks_mask = 0;
+      prv_free_rx_buffer();
+      s_rx_buffer = malloc(total_bytes);
+      if (!s_rx_buffer) {
+        APP_LOG(APP_LOG_LEVEL_ERROR, "No memory for %lu byte frame", (unsigned long)total_bytes);
+        return;
+      }
+      s_rx_total_bytes = total_bytes;
+      s_rx_encoding = encoding_tuple->value->uint8;
     }
-    
-    // Copy incoming bytes to GBitmap buffer
-    if (s_map_buffer && (chunk_idx * CHUNK_SIZE + chunk_len <= s_current_map_buffer_size)) {
-      memcpy(s_map_buffer + (chunk_idx * CHUNK_SIZE), chunk_data, chunk_len);
+
+    // Chunks whose frame header we never staged (dropped chunk 0, failed
+    // alloc) cannot be placed anywhere; wait for the next frame.
+    if (!s_rx_buffer || total_bytes != s_rx_total_bytes) {
+      return;
+    }
+
+    if (chunk_idx * CHUNK_SIZE + chunk_len <= s_rx_total_bytes) {
+      memcpy(s_rx_buffer + (chunk_idx * CHUNK_SIZE), chunk_data, chunk_len);
       s_received_chunks_mask |= (1 << chunk_idx);
       s_expected_chunks = total_chunks;
-      
-      // Check if all chunks received
+
+      // Frame complete: decode into the displayed bitmap in one step
       uint32_t completed_mask = (1 << s_expected_chunks) - 1;
       if (s_received_chunks_mask == completed_mask) {
-        s_map_ready = true;
-        layer_mark_dirty(s_map_layer);
+        bool ok = false;
+        if (s_map_buffer) {
+          if (s_rx_encoding == MAP_ENCODING_PACKBITS) {
+            ok = prv_packbits_decode(s_rx_buffer, s_rx_total_bytes,
+                                     s_map_buffer, s_current_map_buffer_size);
+          } else if (s_rx_total_bytes == s_current_map_buffer_size) {
+            memcpy(s_map_buffer, s_rx_buffer, s_rx_total_bytes);
+            ok = true;
+          }
+        }
+        prv_free_rx_buffer();
+        if (ok) {
+          s_map_ready = true;
+          layer_mark_dirty(s_map_layer);
+        } else {
+          // Wrong size for the current layout (e.g. fullscreen toggled
+          // mid-transfer) or corrupt stream; drop the frame.
+          APP_LOG(APP_LOG_LEVEL_ERROR, "Discarded undecodable map frame");
+        }
       }
     }
   }
@@ -1321,6 +1410,7 @@ static void main_window_unload(Window *window) {
     s_map_bitmap = NULL;
     s_map_buffer = NULL;
   }
+  prv_free_rx_buffer();
   
   // Free layers
   text_layer_destroy(s_distance_layer);
@@ -1619,8 +1709,8 @@ static void init() {
   app_message_register_inbox_dropped(inbox_dropped_handler);
   app_message_register_outbox_failed(outbox_failed_handler);
   
-  // Allocate buffer for AppMessages (3400 inbox, 128 outbox)
-  app_message_open(3400, 128);
+  // Inbox sized for one map chunk per message, outbox for small commands
+  app_message_open(INBOX_SIZE, 128);
   
   // Register battery state service
   battery_state_service_subscribe(battery_state_handler);

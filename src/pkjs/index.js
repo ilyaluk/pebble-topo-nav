@@ -5,7 +5,11 @@ var MAP_WIDTH = 200;
 var MAP_HEIGHT = 150;
 
 // State Variables
-var CHUNK_SIZE = 3000;
+// Sized so one chunk (plus dictionary overhead) fits the watch inbox, which
+// the C side opens at CHUNK_SIZE + overhead. Fewer, larger messages mean
+// fewer radio wakeups per frame. Aplite gets a smaller inbox to fit its RAM;
+// adjusted after platform detection in the ready handler.
+var CHUNK_SIZE = 7100;
 var gpsInterval = 5;
 var gpxTrack = [];
 var currentLocation = null;
@@ -19,6 +23,9 @@ var isSendingMap = false;
 // depends on; null means "no valid image on the watch, always redraw".
 var lastRender = null;
 var pendingRender = null;
+// Hash of the last frame the watch fully received; frames hashing the same
+// are pixel-identical and skipped. null means "watch content unknown".
+var lastDeliveredFrameHash = null;
 // A fix that moves the centre by less than this many pixels produces a
 // visually identical image, so it is not worth a 30 KB transfer. At zoom 17
 // one pixel is roughly a metre, which is well inside GPS jitter.
@@ -207,7 +214,10 @@ Pebble.addEventListener('ready', function() {
     }
   }
   graphics.initMapDimensions(platform);
-  
+  if (platform === "aplite") {
+    CHUNK_SIZE = 3000; // matches the smaller inbox the C side opens on aplite
+  }
+
   // Load settings from LocalStorage
   var storedInterval = localStorage.getItem('gpsInterval');
   if (storedInterval) gpsInterval = parseInt(storedInterval);
@@ -1255,6 +1265,61 @@ function getRenderSignature() {
 // whenever the watch may have lost the image we think it is showing.
 function invalidateLastRender() {
   lastRender = null;
+  lastDeliveredFrameHash = null;
+}
+
+// FNV-1a over the raw frame. Two renders with equal hashes are treated as
+// the same image, so a frame identical to what the watch already shows is
+// never re-sent.
+function hashFrame(bytes) {
+  var h = 0x811c9dc5;
+  for (var i = 0; i < bytes.length; i++) {
+    h ^= bytes[i];
+    // h *= 16777619 (mod 2^32), written with shifts to stay in int32 ops
+    h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+  }
+  return h;
+}
+
+// PackBits-style RLE. Control byte c: c < 128 means c+1 literal bytes
+// follow; c > 128 means the next byte repeats 257-c times; 128 is unused.
+// Quantized 64-color map imagery is dominated by flat runs, so this
+// typically shrinks a frame several-fold at negligible cost on both ends.
+function packBitsEncode(bytes) {
+  var out = [];
+  var len = bytes.length;
+  var i = 0;
+
+  while (i < len) {
+    var b = bytes[i];
+    var run = 1;
+    while (run < 128 && i + run < len && bytes[i + run] === b) {
+      run++;
+    }
+
+    if (run >= 2) {
+      out.push(257 - run, b);
+      i += run;
+      continue;
+    }
+
+    // Literal stretch: extend until the next run of 3+ starts (a 2-run is
+    // no cheaper as a repeat than as two literals) or the 128 cap.
+    var start = i;
+    i++;
+    while (i < len && i - start < 128) {
+      if (i + 2 < len && bytes[i] === bytes[i + 1] && bytes[i] === bytes[i + 2]) {
+        break;
+      }
+      i++;
+    }
+    out.push(i - start - 1);
+    for (var j = start; j < i; j++) {
+      out.push(bytes[j]);
+    }
+  }
+
+  return new Uint8Array(out);
 }
 
 // Render viewport tiles and send map image in chunks
@@ -1391,27 +1456,49 @@ function doRenderAndChunkSend(tileCache, requiredKeys) {
       recordedTrack,
       showBreadcrumbs
     );
-    
+
+    // The watch already shows these exact pixels -- skip the whole transfer.
+    // Catches, among others, a stationary user whose viewport has missing
+    // tiles (lastRender stays unset there, so only the hash prevents an
+    // endless re-send of the identical frame).
+    var frameHash = hashFrame(gcolor8Map);
+    if (frameHash === lastDeliveredFrameHash) {
+      lastRender = allTilesPresent ? pendingRender : null;
+      isSendingMap = false;
+      return;
+    }
+
+    // Compress; fall back to the raw frame in the (pathological) case where
+    // RLE would expand it.
+    var encoded = packBitsEncode(gcolor8Map);
+    var useRle = encoded.length < gcolor8Map.length;
+    var sendData = useRle ? encoded : gcolor8Map;
+    console.log('Map frame: ' + gcolor8Map.length + 'B raw -> ' + sendData.length +
+                'B ' + (useRle ? 'rle' : 'raw'));
+
     // Chunked Transmission Loop
-    var totalSize = gcolor8Map.length; // 30,000 bytes
-    var totalChunks = Math.ceil(totalSize / CHUNK_SIZE); // 10 chunks
-    
+    var totalSize = sendData.length;
+    var totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+
     function sendChunk(chunkIdx) {
       if (chunkIdx >= totalChunks) {
         console.log('Map image fully transmitted to watch!');
+        lastDeliveredFrameHash = frameHash;
         lastRender = allTilesPresent ? pendingRender : null;
         isSendingMap = false;
         return;
       }
-      
+
       var start = chunkIdx * CHUNK_SIZE;
       var end = Math.min(start + CHUNK_SIZE, totalSize);
-      var chunkData = Array.prototype.slice.call(gcolor8Map.subarray(start, end));
-      
+      var chunkData = Array.prototype.slice.call(sendData.subarray(start, end));
+
       var payload = {
         MAP_DATA_CHUNK: chunkData,
         CHUNK_INDEX: chunkIdx,
-        TOTAL_CHUNKS: totalChunks
+        TOTAL_CHUNKS: totalChunks,
+        MAP_ENCODING: useRle ? 1 : 0,
+        MAP_TOTAL_BYTES: totalSize
       };
       
       var retries = 0;
