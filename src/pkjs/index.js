@@ -1412,13 +1412,20 @@ function tileRecentlyFailed(storeKey) {
   return failedAt !== undefined && (Date.now() - failedAt) < TILE_FAIL_RETRY_MS;
 }
 
-// --- Persistent tile cache accounting (LRU under a byte budget) ---
-// localStorage is a shared, small pool (typically ~5 MB, also holding routes
-// and trips); at its quota every further write fails. Tiles are tracked in
-// an index (storeKey -> last-use time and size) and the least recently used
-// ones are evicted to keep the total under TILE_CACHE_MAX_BYTES.
-var TILE_CACHE_MAX_BYTES = 3.5 * 1024 * 1024;
+// --- Persistent tile cache accounting (LRU under a discovered cap) ---
+// localStorage is a shared pool (also holding routes and trips) whose real
+// quota varies wildly between phone apps and there is no API to query it.
+// Rather than assuming a size, tiles are stored freely until a write throws
+// QuotaExceededError; that failure point IS the capacity probe. 90% of it
+// is persisted as the cap (headroom for routes/trips growing later), and
+// each session start raises the cap by 10% so capacity freed since (deleted
+// trips, larger quota) gets re-discovered instead of staying locked out.
+// Tiles are tracked in an index (storeKey -> last-use time and size); the
+// least recently used ones are evicted to keep the total under the cap.
 var TILE_INDEX_KEY = 'tileCacheIndex';
+var TILE_CACHE_CAP_KEY = 'tileCacheCapBytes';
+var TILE_CACHE_MIN_CAP = 512 * 1024; // even a tiny quota keeps a few tiles
+var tileCacheCapBytes = null; // null: no quota error seen yet, store freely
 var tileIndex = {};
 var tileCacheBytes = 0;
 var tileIndexFlushTimer = null;
@@ -1428,8 +1435,20 @@ function tileCacheDebugString() {
   for (var k in tileIndex) {
     if (tileIndex.hasOwnProperty(k)) count++;
   }
+  var capStr = tileCacheCapBytes === null ? 'no cap discovered' :
+               'cap ' + (tileCacheCapBytes / (1024 * 1024)).toFixed(2) + ' MB';
   return count + ' tiles, ' + (tileCacheBytes / (1024 * 1024)).toFixed(2) +
-         ' / ' + (TILE_CACHE_MAX_BYTES / (1024 * 1024)).toFixed(1) + ' MB';
+         ' MB (' + capStr + ')';
+}
+
+// Called when localStorage.setItem threw: the current fill level is the
+// most accurate capacity measurement available.
+function discoverTileCacheCap() {
+  tileCacheCapBytes = Math.max(TILE_CACHE_MIN_CAP, Math.floor(tileCacheBytes * 0.9));
+  try {
+    localStorage.setItem(TILE_CACHE_CAP_KEY, String(tileCacheCapBytes));
+  } catch (e) {}
+  console.log('Tile cache: quota hit, cap discovered at ' + tileCacheDebugString());
 }
 
 // The index itself is persisted lazily -- recency bookkeeping is not worth
@@ -1482,6 +1501,11 @@ function loadTileIndex() {
   for (var k in tileIndex) {
     if (tileIndex.hasOwnProperty(k)) tileCacheBytes += tileIndex[k].s;
   }
+  var storedCap = parseInt(localStorage.getItem(TILE_CACHE_CAP_KEY) || '', 10);
+  if (storedCap > 0) {
+    // The 10% raise is in-memory only; it persists on the next quota error
+    tileCacheCapBytes = Math.floor(storedCap * 1.1);
+  }
   adoptUntrackedTiles();
 }
 
@@ -1526,24 +1550,26 @@ function evictLRUTiles(bytesToFree) {
   }
 }
 
-// Store a tile under the budget. allowEvict distinguishes the two callers:
-// the render path may push out older tiles (the user is looking at this one
-// right now), while prefetch must stop at the budget instead -- evicting
-// prefetched tiles to store more prefetch just burns downloads.
+// Store a tile under the discovered cap. allowEvict distinguishes the two
+// callers: the render path may push out older tiles (the user is looking at
+// this one right now), while prefetch must stop at the cap instead --
+// evicting prefetched tiles to store more prefetch just burns downloads.
 // Returns false when the tile was not persisted.
 function storeTile(storeKey, base64, allowEvict) {
   var size = base64.length;
   var prevSize = tileIndex[storeKey] ? tileIndex[storeKey].s : 0;
   var projected = tileCacheBytes - prevSize + size;
-  if (projected > TILE_CACHE_MAX_BYTES) {
+  if (tileCacheCapBytes !== null && projected > tileCacheCapBytes) {
     if (!allowEvict) return false;
-    evictLRUTiles(projected - TILE_CACHE_MAX_BYTES);
+    evictLRUTiles(projected - tileCacheCapBytes);
   }
   try {
     localStorage.setItem(storeKey, base64);
   } catch (e) {
-    // Quota hit despite the budget (storage shared with routes/trips):
-    // evict harder and retry once.
+    // The write itself is the capacity probe: adopt the failure point as
+    // the cap (also clamps a stale cap down when routes/trips have grown),
+    // then evict and retry once for the render path.
+    discoverTileCacheCap();
     if (!allowEvict) return false;
     evictLRUTiles(Math.max(size * 4, 256 * 1024));
     try {
@@ -1890,7 +1916,7 @@ function doRenderAndChunkSend(tileCache, requiredKeys) {
 // Background Tile Cacher along the GPX Track. Prefetches at the zoom that is
 // actually being displayed -- caching a level nobody looks at means every
 // tile on the trail still goes over the cellular radio at view time.
-var PREFETCH_TILE_CAP = 200; // bounds per-run work; storeTile's byte budget is the hard cap
+var PREFETCH_TILE_CAP = 200; // bounds per-run work; storeTile's discovered cap is the hard limit
 var prefetchRunToken = 0;
 var prefetchDebounceTimer = null;
 
@@ -1960,7 +1986,7 @@ function cacheTrackTiles(track) {
         if (storeTile(storeKey, arrayBufferToBase64(xhr.response), false)) {
           delete failedTiles[storeKey];
         } else {
-          console.log('Tile cache budget reached, stopping prefetch (' + tileCacheDebugString() + ')');
+          console.log('Tile cache cap reached, stopping prefetch (' + tileCacheDebugString() + ')');
           return;
         }
       } else {
