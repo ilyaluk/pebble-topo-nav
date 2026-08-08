@@ -845,7 +845,10 @@ Pebble.addEventListener('appmessage', function(e) {
   console.log('Received AppMessage from watch: ' + JSON.stringify(dict));
   
   if (dict.ZOOM_LEVEL !== undefined) {
-    currentZoom = dict.ZOOM_LEVEL;
+    if (dict.ZOOM_LEVEL !== currentZoom) {
+      currentZoom = dict.ZOOM_LEVEL;
+      schedulePrefetchAtCurrentZoom();
+    }
   }
   
   if (dict.MAP_VISIBLE !== undefined) {
@@ -1278,6 +1281,17 @@ var DECODED_TILE_LIMIT = 6;
 var decodedTiles = {};
 var decodedTileOrder = []; // same keys, least recently used first
 
+// Tiles whose download recently failed (offline, 404, server error). The
+// negative cache keeps a permanently unavailable tile from being re-requested
+// on every render.
+var TILE_FAIL_RETRY_MS = 60 * 1000;
+var failedTiles = {};
+
+function tileRecentlyFailed(storeKey) {
+  var failedAt = failedTiles[storeKey];
+  return failedAt !== undefined && (Date.now() - failedAt) < TILE_FAIL_RETRY_MS;
+}
+
 function getDecodedTile(storeKey) {
   var tile = decodedTiles[storeKey];
   if (!tile) return null;
@@ -1440,9 +1454,11 @@ function renderAndSendMap() {
           putDecodedTile(storeKey, decoded);
         } catch (err) {
           console.log('Cached tile decode error (' + key + '): ' + err);
-          tilesToFetch.push({ key: key, z: currentZoom, x: tx, y: ty });
+          if (!tileRecentlyFailed(storeKey)) {
+            tilesToFetch.push({ key: key, z: currentZoom, x: tx, y: ty });
+          }
         }
-      } else {
+      } else if (!tileRecentlyFailed(storeKey)) {
         // Tile not cached, fetch online
         tilesToFetch.push({ key: key, z: currentZoom, x: tx, y: ty });
       }
@@ -1468,24 +1484,30 @@ function renderAndSendMap() {
       xhr.responseType = 'arraybuffer';
       
       xhr.onload = function() {
+        var itemStoreKey = 'tile_' + mapSource + '_' + item.key;
         if (xhr.status === 200) {
           try {
             var bytes = new Uint8Array(xhr.response);
             var decoded = png.decodePNG(bytes);
             tileCache[item.key] = decoded;
-            putDecodedTile('tile_' + mapSource + '_' + item.key, decoded);
+            putDecodedTile(itemStoreKey, decoded);
 
             // Cache downloaded tile in localStorage
             var base64 = arrayBufferToBase64(xhr.response);
-            localStorage.setItem('tile_' + mapSource + '_' + item.key, base64);
+            localStorage.setItem(itemStoreKey, base64);
+            delete failedTiles[itemStoreKey];
           } catch (e) {
             console.log('Error decoding fetched tile ' + item.key + ': ' + e);
+            failedTiles[itemStoreKey] = Date.now();
           }
+        } else {
+          failedTiles[itemStoreKey] = Date.now();
         }
         checkCompleted();
       };
       xhr.onerror = function() {
         console.error('Failed to fetch tile: ' + item.key);
+        failedTiles['tile_' + mapSource + '_' + item.key] = Date.now();
         checkCompleted();
       };
       xhr.send();
@@ -1593,74 +1615,111 @@ function doRenderAndChunkSend(tileCache, requiredKeys) {
   }
 }
 
-// Background Tile Cacher along the GPX Track
+// Background Tile Cacher along the GPX Track. Prefetches at the zoom that is
+// actually being displayed -- caching a level nobody looks at means every
+// tile on the trail still goes over the cellular radio at view time.
+var PREFETCH_TILE_CAP = 200; // ~5MB localStorage budget shared with settings
+var prefetchRunToken = 0;
+var prefetchDebounceTimer = null;
+
 function cacheTrackTiles(track) {
-  var zoom = 15;
+  var zoom = currentZoom;
   var tileKeys = [];
   var seen = {};
-  
-  for (var i = 0; i < track.length; i++) {
+  var capped = false;
+
+  for (var i = 0; i < track.length && !capped; i++) {
     var pt = track[i];
     var tile = graphics.latLonToPixels(pt.lat, pt.lon, zoom);
     var tileX = Math.floor(tile.x / 256);
     var tileY = Math.floor(tile.y / 256);
-    
+
     // Cache 3x3 block around track points
-    for (var dx = -1; dx <= 1; dx++) {
+    for (var dx = -1; dx <= 1 && !capped; dx++) {
       for (var dy = -1; dy <= 1; dy++) {
         var key = zoom + '/' + (tileX + dx) + '/' + (tileY + dy);
         if (!seen[key]) {
           seen[key] = true;
           tileKeys.push({ key: key, z: zoom, x: tileX + dx, y: tileY + dy });
+          if (tileKeys.length >= PREFETCH_TILE_CAP) {
+            capped = true;
+            break;
+          }
         }
       }
     }
   }
-  
-  console.log('Background Tile Cache Scheduler: ' + tileKeys.length + ' tiles detected.');
-  
+
+  console.log('Background Tile Cache Scheduler: ' + tileKeys.length + ' tiles at zoom ' + zoom +
+              (capped ? ' (CAPPED at ' + PREFETCH_TILE_CAP + ', tail of route not prefetched)' : ''));
+
+  // A newer run (route change, zoom change) invalidates this one
+  prefetchRunToken++;
+  var runToken = prefetchRunToken;
+
   var idx = 0;
   function downloadNext() {
+    if (runToken !== prefetchRunToken) {
+      return; // superseded
+    }
     if (idx >= tileKeys.length) {
       console.log('Offline tile caching fully completed!');
       return;
     }
-    
+
     var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
     var item = tileKeys[idx];
     var storeKey = 'tile_' + mapSource + '_' + item.key;
-    
-    if (localStorage.getItem(storeKey)) {
+
+    if (localStorage.getItem(storeKey) || tileRecentlyFailed(storeKey)) {
       idx++;
       downloadNext();
       return;
     }
-    
+
     var url = getTileUrl(item.z, item.x, item.y);
-    
+
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.responseType = 'arraybuffer';
-    
+
     xhr.onload = function() {
       if (xhr.status === 200) {
         try {
           var base64 = arrayBufferToBase64(xhr.response);
           localStorage.setItem(storeKey, base64);
+          delete failedTiles[storeKey];
         } catch (e) {
           console.warn('LocalStorage full, stopping offline caching.');
           return;
         }
+      } else {
+        failedTiles[storeKey] = Date.now();
       }
       idx++;
       setTimeout(downloadNext, 120); // rate limiting request
     };
     xhr.onerror = function() {
+      failedTiles[storeKey] = Date.now();
       idx++;
       setTimeout(downloadNext, 120);
     };
     xhr.send();
   }
-  
+
   downloadNext();
+}
+
+// Zoom changes arrive per button press; wait for the user to settle before
+// re-running the prefetch pass at the new level.
+function schedulePrefetchAtCurrentZoom() {
+  if (prefetchDebounceTimer) {
+    clearTimeout(prefetchDebounceTimer);
+  }
+  prefetchDebounceTimer = setTimeout(function() {
+    prefetchDebounceTimer = null;
+    if (gpxTrack.length > 0) {
+      cacheTrackTiles(gpxTrack);
+    }
+  }, 10000);
 }
