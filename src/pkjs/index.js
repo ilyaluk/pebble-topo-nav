@@ -155,6 +155,47 @@ function base64ToUint8Array(base64) {
   return outIdx === outLen ? bytes : bytes.subarray(0, outIdx);
 }
 
+// Status values as last acknowledged by the watch. Status payloads are
+// diffed against this so unchanged keys (language, settings, unchanged nav
+// text) are not retransmitted every fix -- each avoided key also avoids the
+// redraw/persist work its arrival triggers on the watch.
+var lastSentStatus = {};
+
+function resetStatusCache() {
+  lastSentStatus = {};
+}
+
+// Sends only the keys whose values differ from what the watch already has.
+// VIBRATE_ALERT is an event, not state, and always passes through. Keys are
+// recorded only after the watch ACKs, so a failed send retries them later.
+function sendStatusMessage(payload, onSuccess, onFailure) {
+  var delta = {};
+  var changedKeys = [];
+  for (var key in payload) {
+    if (!payload.hasOwnProperty(key)) continue;
+    if (key === 'VIBRATE_ALERT' || payload[key] !== lastSentStatus[key]) {
+      delta[key] = payload[key];
+      changedKeys.push(key);
+    }
+  }
+
+  if (changedKeys.length === 0) {
+    if (onSuccess) onSuccess();
+    return;
+  }
+
+  Pebble.sendAppMessage(delta, function() {
+    for (var i = 0; i < changedKeys.length; i++) {
+      if (changedKeys[i] !== 'VIBRATE_ALERT') {
+        lastSentStatus[changedKeys[i]] = delta[changedKeys[i]];
+      }
+    }
+    if (onSuccess) onSuccess();
+  }, function(e) {
+    if (onFailure) onFailure(e);
+  });
+}
+
 // Haversine formula to compute distance in meters
 function haversineDistance(lat1, lon1, lat2, lon2) {
   var R = 6371000; // Radius of the Earth in meters
@@ -604,7 +645,7 @@ function startRecording() {
   lastPositionCoords = null;
   
   // Confirm start with short vibe
-  Pebble.sendAppMessage({
+  sendStatusMessage({
     RECORDING_STATE: 1,
     VIBRATE_ALERT: 1
   });
@@ -635,7 +676,7 @@ function stopRecording(save) {
   localStorage.setItem('recordedTrack', JSON.stringify(recordedTrack));
   
   // Confirm stop with double vibe
-  Pebble.sendAppMessage({
+  sendStatusMessage({
     RECORDING_STATE: 0,
     VIBRATE_ALERT: 2
   });
@@ -818,10 +859,12 @@ Pebble.addEventListener('appmessage', function(e) {
   }
 
   if (dict.REQUEST_MAP_UPDATE !== undefined) {
-    // The watch asks for this when it has no image to show (app launch,
-    // window reload), so redraw even if the viewport looks unchanged.
+    // The watch sends this alongside zoom changes: the frame it shows is
+    // stale, so redraw even if the viewport looks unchanged, and assume
+    // nothing about what status values it still holds.
     mapVisibleOnWatch = true; // a map request implies the map is showing
     invalidateLastRender();
+    resetStatusCache();
     updateWatchNavigationAndMap();
   }
   
@@ -997,7 +1040,7 @@ function onGPSError(err) {
   var isEnglish = localStorage.getItem('language') === 'en';
   var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   // Notify watch of lost connection
-  Pebble.sendAppMessage({
+  sendStatusMessage({
     GPS_CONNECTED: 0,
     NAV_INSTRUCTION: isEnglish ? 'No GPS Signal' : 'Kein GPS-Signal',
     NAV_DISTANCE: '---',
@@ -1017,7 +1060,7 @@ function updateWatchNavigationAndMap() {
   var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   
   if (!currentLocation) {
-    Pebble.sendAppMessage({
+    sendStatusMessage({
       GPS_CONNECTED: 0,
       LANGUAGE: isEnglish ? 1 : 0,
       RECORDING_STATE: isNavigating ? 1 : 0,
@@ -1215,8 +1258,8 @@ function updateWatchNavigationAndMap() {
     payload.VIBRATE_ALERT = vibrateAlert;
   }
   
-  // Send status/nav values first
-  Pebble.sendAppMessage(payload, function() {
+  // Send status/nav values first (only keys that changed go over the air)
+  sendStatusMessage(payload, function() {
     // Render and send the map image afterward
     renderAndSendMap();
   }, function(e) {

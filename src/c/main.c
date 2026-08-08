@@ -751,53 +751,73 @@ static void prv_free_rx_buffer(void) {
   s_rx_total_bytes = 0;
 }
 
+// Copies new_text into buf and pushes it to the layer only when the text
+// actually changed; text_layer_set_text schedules a redraw even for an
+// identical string.
+static void prv_set_text_if_changed(TextLayer *layer, char *buf, size_t buf_size, const char *new_text) {
+  if (!layer || !new_text) {
+    return;
+  }
+  if (strncmp(buf, new_text, buf_size) == 0) {
+    return;
+  }
+  snprintf(buf, buf_size, "%s", new_text);
+  text_layer_set_text(layer, buf);
+}
+
 // AppMessage Callback Handlers
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *lang_tuple = dict_find(iter, MESSAGE_KEY_LANGUAGE);
   if (lang_tuple) {
-    s_is_english = (lang_tuple->value->uint8 == 1);
-    persist_write_bool(PERSIST_KEY_LANGUAGE, s_is_english);
-    update_ui_languages();
-    if (s_map_layer) {
-      layer_mark_dirty(s_map_layer);
+    bool is_english = (lang_tuple->value->uint8 == 1);
+    // Only a real change is worth a flash write and a relabel of the UI
+    if (is_english != s_is_english) {
+      s_is_english = is_english;
+      persist_write_bool(PERSIST_KEY_LANGUAGE, s_is_english);
+      update_ui_languages();
+      if (s_map_layer) {
+        layer_mark_dirty(s_map_layer);
+      }
     }
   }
 
   // Handle text values
   Tuple *dist_tuple = dict_find(iter, MESSAGE_KEY_NAV_DISTANCE);
   if (dist_tuple) {
-    if (s_distance_layer) {
-      snprintf(s_distance_text, sizeof(s_distance_text), "%s", dist_tuple->value->cstring);
-      text_layer_set_text(s_distance_layer, s_distance_text);
-    }
-    if (s_dash_dist_dest_val_layer) {
-      snprintf(s_dist_dest_text, sizeof(s_dist_dest_text), "%s", dist_tuple->value->cstring);
-      text_layer_set_text(s_dash_dist_dest_val_layer, s_dist_dest_text);
-    }
+    prv_set_text_if_changed(s_distance_layer, s_distance_text, sizeof(s_distance_text),
+                            dist_tuple->value->cstring);
+    prv_set_text_if_changed(s_dash_dist_dest_val_layer, s_dist_dest_text, sizeof(s_dist_dest_text),
+                            dist_tuple->value->cstring);
   }
-  
+
   Tuple *inst_tuple = dict_find(iter, MESSAGE_KEY_NAV_INSTRUCTION);
-  if (inst_tuple && s_instruction_layer) {
-    snprintf(s_instruction_text, sizeof(s_instruction_text), "%s", inst_tuple->value->cstring);
-    text_layer_set_text(s_instruction_layer, s_instruction_text);
+  if (inst_tuple) {
+    prv_set_text_if_changed(s_instruction_layer, s_instruction_text, sizeof(s_instruction_text),
+                            inst_tuple->value->cstring);
   }
-  
+
   Tuple *bearing_tuple = dict_find(iter, MESSAGE_KEY_NAV_BEARING);
   if (bearing_tuple) {
-    s_nav_bearing = bearing_tuple->value->int32;
-    if (s_header_layer) {
-      layer_mark_dirty(s_header_layer);
+    int new_bearing = bearing_tuple->value->int32;
+    if (new_bearing != s_nav_bearing) {
+      s_nav_bearing = new_bearing;
+      if (s_header_layer) {
+        layer_mark_dirty(s_header_layer);
+      }
     }
   }
-  
+
   Tuple *gps_tuple = dict_find(iter, MESSAGE_KEY_GPS_CONNECTED);
   if (gps_tuple) {
-    s_gps_connected = (gps_tuple->value->uint8 == 1);
-    if (s_header_layer) {
-      layer_mark_dirty(s_header_layer);
-    }
-    if (s_map_layer) {
-      layer_mark_dirty(s_map_layer);
+    bool gps_connected = (gps_tuple->value->uint8 == 1);
+    if (gps_connected != s_gps_connected) {
+      s_gps_connected = gps_connected;
+      if (s_header_layer) {
+        layer_mark_dirty(s_header_layer);
+      }
+      if (s_map_layer) {
+        layer_mark_dirty(s_map_layer);
+      }
     }
   }
 
@@ -845,16 +865,13 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *rec_tuple = dict_find(iter, MESSAGE_KEY_RECORDING_STATE);
   if (rec_tuple) {
     bool new_state = (rec_tuple->value->uint8 == 1);
-    if (!s_recording_active && new_state) {
-      s_activity_start_time = time(NULL);
-    }
-    s_recording_active = new_state;
-    if (!s_recording_active) {
-      s_activity_start_time = 0;
-    }
-    update_time_and_duration();
-    if (s_header_layer) {
-      layer_mark_dirty(s_header_layer);
+    if (new_state != s_recording_active) {
+      s_recording_active = new_state;
+      s_activity_start_time = new_state ? time(NULL) : 0;
+      update_time_and_duration();
+      if (s_header_layer) {
+        layer_mark_dirty(s_header_layer);
+      }
     }
   }
 
@@ -927,46 +944,54 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   
   // Dashboard fields
   Tuple *avg_speed_tuple = dict_find(iter, MESSAGE_KEY_AVG_SPEED);
-  if (avg_speed_tuple && s_dash_avg_speed_val_layer) {
-    snprintf(s_avg_speed_text, sizeof(s_avg_speed_text), "%s", avg_speed_tuple->value->cstring);
-    text_layer_set_text(s_dash_avg_speed_val_layer, s_avg_speed_text);
+  if (avg_speed_tuple) {
+    prv_set_text_if_changed(s_dash_avg_speed_val_layer, s_avg_speed_text, sizeof(s_avg_speed_text),
+                            avg_speed_tuple->value->cstring);
   }
+
+  // The two-value fields get their space replaced by a newline before the
+  // comparison, so an unchanged value still short-circuits.
+  char two_val_buf[16];
   Tuple *gain_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_GAIN);
-  if(gain_tuple && s_dash_gain_val_layer) {
-    snprintf(s_elevation_gain_text, sizeof(s_elevation_gain_text), "%s", gain_tuple->value->cstring);
-    SpaceOrNewline(s_elevation_gain_text);
-    text_layer_set_text(s_dash_gain_val_layer, s_elevation_gain_text);
+  if (gain_tuple) {
+    snprintf(two_val_buf, sizeof(two_val_buf), "%s", gain_tuple->value->cstring);
+    SpaceOrNewline(two_val_buf);
+    prv_set_text_if_changed(s_dash_gain_val_layer, s_elevation_gain_text, sizeof(s_elevation_gain_text),
+                            two_val_buf);
   }
 
   Tuple *loss_tuple = dict_find(iter, MESSAGE_KEY_ELEVATION_LOSS);
-  if(loss_tuple && s_dash_loss_val_layer) {
-    snprintf(s_elevation_loss_text, sizeof(s_elevation_loss_text), "%s", loss_tuple->value->cstring);
-    SpaceOrNewline(s_elevation_loss_text);
-    text_layer_set_text(s_dash_loss_val_layer, s_elevation_loss_text);
+  if (loss_tuple) {
+    snprintf(two_val_buf, sizeof(two_val_buf), "%s", loss_tuple->value->cstring);
+    SpaceOrNewline(two_val_buf);
+    prv_set_text_if_changed(s_dash_loss_val_layer, s_elevation_loss_text, sizeof(s_elevation_loss_text),
+                            two_val_buf);
   }
-  
+
   Tuple *trip_dist_tuple = dict_find(iter, MESSAGE_KEY_TRIP_DISTANCE);
-  if (trip_dist_tuple && s_dash_dist_val_layer) {
-    snprintf(s_trip_distance_text, sizeof(s_trip_distance_text), "%s", trip_dist_tuple->value->cstring);
-    SpaceOrNewline(s_trip_distance_text);
-    text_layer_set_text(s_dash_dist_val_layer, s_trip_distance_text);
+  if (trip_dist_tuple) {
+    snprintf(two_val_buf, sizeof(two_val_buf), "%s", trip_dist_tuple->value->cstring);
+    SpaceOrNewline(two_val_buf);
+    prv_set_text_if_changed(s_dash_dist_val_layer, s_trip_distance_text, sizeof(s_trip_distance_text),
+                            two_val_buf);
   }
+
   Tuple *coords_tuple = dict_find(iter, MESSAGE_KEY_GPS_COORDS);
-  if (coords_tuple && s_dash_coords_val_layer) {
-    snprintf(s_coords_text, sizeof(s_coords_text), "%s", coords_tuple->value->cstring);
-    text_layer_set_text(s_dash_coords_val_layer, s_coords_text);
+  if (coords_tuple) {
+    prv_set_text_if_changed(s_dash_coords_val_layer, s_coords_text, sizeof(s_coords_text),
+                            coords_tuple->value->cstring);
   }
-  
+
   Tuple *alt_tuple = dict_find(iter, MESSAGE_KEY_GPS_ALT_STR);
-  if (alt_tuple && s_dash_alt_val_layer) {
-    snprintf(s_alt_text, sizeof(s_alt_text), "%s", alt_tuple->value->cstring);
-    text_layer_set_text(s_dash_alt_val_layer, s_alt_text);
+  if (alt_tuple) {
+    prv_set_text_if_changed(s_dash_alt_val_layer, s_alt_text, sizeof(s_alt_text),
+                            alt_tuple->value->cstring);
   }
-  
+
   Tuple *heading_str_tuple = dict_find(iter, MESSAGE_KEY_HEADING_STR);
-  if (heading_str_tuple && s_dash_heading_val_layer) {
-    snprintf(s_heading_text, sizeof(s_heading_text), "%s", heading_str_tuple->value->cstring);
-    text_layer_set_text(s_dash_heading_val_layer, s_heading_text);
+  if (heading_str_tuple) {
+    prv_set_text_if_changed(s_dash_heading_val_layer, s_heading_text, sizeof(s_heading_text),
+                            heading_str_tuple->value->cstring);
   }
   
 
