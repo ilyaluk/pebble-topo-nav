@@ -1524,7 +1524,6 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_dash_battery_val_layer);
   text_layer_destroy(s_dash_dist_dest_title_layer);
   text_layer_destroy(s_dash_dist_dest_val_layer);
-  layer_destroy(s_dashboard_layer);
 }
 
 static void battery_state_handler(BatteryChargeState charge) {
