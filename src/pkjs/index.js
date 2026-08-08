@@ -16,6 +16,10 @@ var currentLocation = null;
 var currentLL = null;
 var currentZoom = 17;
 var isSendingMap = false;
+// The watch reports whether its map pixels can currently be seen (dashboard,
+// menus and the big-nav popup hide them). While hidden, rendering and
+// streaming frames would burn radio time for pixels nobody sees.
+var mapVisibleOnWatch = true;
 
 // Last map image successfully transmitted to the watch, so that an unchanged
 // viewport does not get re-rendered and re-sent on every GPS fix. Holds the
@@ -803,9 +807,20 @@ Pebble.addEventListener('appmessage', function(e) {
     currentZoom = dict.ZOOM_LEVEL;
   }
   
+  if (dict.MAP_VISIBLE !== undefined) {
+    var nowVisible = dict.MAP_VISIBLE === 1;
+    if (nowVisible && !mapVisibleOnWatch) {
+      mapVisibleOnWatch = true;
+      updateWatchNavigationAndMap(); // catch up on whatever moved while hidden
+    } else {
+      mapVisibleOnWatch = nowVisible;
+    }
+  }
+
   if (dict.REQUEST_MAP_UPDATE !== undefined) {
     // The watch asks for this when it has no image to show (app launch,
     // window reload), so redraw even if the viewport looks unchanged.
+    mapVisibleOnWatch = true; // a map request implies the map is showing
     invalidateLastRender();
     updateWatchNavigationAndMap();
   }
@@ -1325,6 +1340,12 @@ function packBitsEncode(bytes) {
 // Render viewport tiles and send map image in chunks
 function renderAndSendMap() {
   if (isSendingMap || !currentLocation) return;
+
+  // No map pixels are visible on the watch right now: hidden by the
+  // dashboard/menu/popup (reported by the watch) or the user runs in Arrow
+  // Only mode, where the watch never draws the map at all.
+  if (!mapVisibleOnWatch) return;
+  if (parseInt(localStorage.getItem('navViewMode') || '0', 10) === 2) return;
 
   // 1. Identify which tiles are needed for the current viewport
   var centerPix = graphics.latLonToPixels(currentLocation.lat, currentLocation.lon, currentZoom);

@@ -240,6 +240,32 @@ static const VibePattern s_off_route_pattern = {
   .num_segments = ARRAY_LENGTH(s_off_route_segments),
 };
 
+// Map visibility reporting: while the map pixels cannot be seen (dashboard
+// or a menu on top, big-nav popup, Arrow Only mode) the phone should not
+// render or stream frames at all -- the transfer is the expensive part.
+static bool s_map_reported_visible = true;
+static uint8_t s_overlay_windows = 0; // menu/confirm windows above the map
+
+static bool prv_map_is_visible(void) {
+  return !s_show_dashboard && !s_big_nav_active && s_nav_view_mode != 2 &&
+         s_overlay_windows == 0;
+}
+
+static void prv_report_map_visibility(void) {
+  bool visible = prv_map_is_visible();
+  if (visible == s_map_reported_visible) {
+    return;
+  }
+  DictionaryIterator *iter;
+  if (app_message_outbox_begin(&iter) != APP_MSG_OK || !iter) {
+    return; // outbox busy; retried from the next inbox message
+  }
+  dict_write_uint8(iter, MESSAGE_KEY_MAP_VISIBLE, visible ? 1 : 0);
+  if (app_message_outbox_send() == APP_MSG_OK) {
+    s_map_reported_visible = visible;
+  }
+}
+
 // Send zoom change to the phone JS companion
 static void send_zoom_change() {
   DictionaryIterator *iter;
@@ -562,6 +588,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (s_big_nav_layer) {
       layer_set_hidden(s_big_nav_layer, true); // Hide big nav layer when dashboard is open
     }
+    prv_report_map_visibility();
   } else {
     // Open Route Selection Menu
     if (!s_menu_window) {
@@ -588,12 +615,14 @@ static void back_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (s_big_nav_layer) {
       layer_set_hidden(s_big_nav_layer, !s_big_nav_active); // Restore big nav layer if it was active
     }
+    prv_report_map_visibility();
   } else if (s_big_nav_active && s_nav_view_mode != 2) {
     // Dismiss auto-popup manually
     s_big_nav_active = false;
     if (s_big_nav_layer) {
       layer_set_hidden(s_big_nav_layer, true);
     }
+    prv_report_map_visibility();
   } else {
     // Close the app by popping main window
     window_stack_pop(true);
@@ -999,6 +1028,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
       }
     }
   }
+
+  // Doubles as a retry for a visibility report whose send previously failed:
+  // any inbound message gives us another chance to bring the phone in sync.
+  prv_report_map_visibility();
 }
 
 static void inbox_dropped_handler(AppMessageResult reason, void *context) {
@@ -1611,6 +1644,9 @@ static void confirm_window_load(Window *window) {
   
   layer_add_child(window_layer, text_layer_get_layer(s_confirm_text_layer));
   layer_add_child(window_layer, text_layer_get_layer(s_confirm_subtext_layer));
+
+  s_overlay_windows++;
+  prv_report_map_visibility();
 }
 
 static void confirm_window_unload(Window *window) {
@@ -1626,6 +1662,10 @@ static void confirm_window_unload(Window *window) {
     window_destroy(s_confirm_window);
     s_confirm_window = NULL;
   }
+  if (s_overlay_windows > 0) {
+    s_overlay_windows--;
+  }
+  prv_report_map_visibility();
 }
 
 static void show_confirm_window() {
@@ -1672,6 +1712,9 @@ static void menu_window_load(Window *window) {
   
   menu_layer_set_click_config_onto_window(s_menu_layer, window);
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
+
+  s_overlay_windows++;
+  prv_report_map_visibility();
 }
 
 static void menu_window_unload(Window *window) {
@@ -1683,6 +1726,10 @@ static void menu_window_unload(Window *window) {
     window_destroy(s_menu_window);
     s_menu_window = NULL;
   }
+  if (s_overlay_windows > 0) {
+    s_overlay_windows--;
+  }
+  prv_report_map_visibility();
 }
 
 // App Initialization
