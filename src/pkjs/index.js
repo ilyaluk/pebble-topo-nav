@@ -720,7 +720,9 @@ Pebble.addEventListener('webviewclosed', function(e) {
       
       if (mapSource !== oldMapSource) {
         console.log('Map source changed from ' + oldMapSource + ' to ' + mapSource + '. Triggering map reload.');
-        // Force reload by clearing memory cache first (optional, but good practice since memory cache keys are style-agnostic)
+        // Decoded tiles of the old style are now dead weight; drop them so the
+        // new style does not have to wait for them to age out of the cache.
+        clearDecodedTiles();
         isSendingMap = false; // Reset map sending locks if any
         // We will call updateWatchNavigationAndMap() later in the handler, but doing it here guarantees immediate response.
       }
@@ -1159,6 +1161,40 @@ function updateWatchNavigationAndMap() {
   });
 }
 
+// Decoded tiles, keyed by their localStorage key. Without this every render
+// re-runs base64 decoding and png.decodePNG over the whole viewport, which is
+// the bulk of the phone-side work for a map that has barely moved. A decoded
+// tile is 256*256*4 bytes of RGBA, so only a few are held: the viewport spans
+// at most four, and the spare slots give panning some hysteresis.
+var DECODED_TILE_LIMIT = 6;
+var decodedTiles = {};
+var decodedTileOrder = []; // same keys, least recently used first
+
+function getDecodedTile(storeKey) {
+  var tile = decodedTiles[storeKey];
+  if (!tile) return null;
+  putDecodedTile(storeKey, tile); // refresh recency
+  return tile;
+}
+
+function putDecodedTile(storeKey, tile) {
+  var idx = decodedTileOrder.indexOf(storeKey);
+  if (idx !== -1) {
+    decodedTileOrder.splice(idx, 1);
+  }
+  decodedTiles[storeKey] = tile;
+  decodedTileOrder.push(storeKey);
+
+  while (decodedTileOrder.length > DECODED_TILE_LIMIT) {
+    delete decodedTiles[decodedTileOrder.shift()];
+  }
+}
+
+function clearDecodedTiles() {
+  decodedTiles = {};
+  decodedTileOrder = [];
+}
+
 // Everything renderViewport() draws that is not the map centre. Any change
 // here means the image differs even if the watch has not moved.
 function getRenderSignature() {
@@ -1218,13 +1254,21 @@ function renderAndSendMap() {
       var key = currentZoom + '/' + tx + '/' + ty;
       var storeKey = 'tile_' + mapSource + '_' + key;
       requiredKeys.push(key);
+
+      var memoryTile = getDecodedTile(storeKey);
+      if (memoryTile) {
+        tileCache[key] = memoryTile;
+        continue;
+      }
+
       var cachedBase64 = localStorage.getItem(storeKey);
-      
+
       if (cachedBase64) {
         try {
           var bytes = base64ToUint8Array(cachedBase64);
           var decoded = png.decodePNG(bytes);
           tileCache[key] = decoded;
+          putDecodedTile(storeKey, decoded);
         } catch (err) {
           console.log('Cached tile decode error (' + key + '): ' + err);
           tilesToFetch.push({ key: key, z: currentZoom, x: tx, y: ty });
@@ -1260,7 +1304,8 @@ function renderAndSendMap() {
             var bytes = new Uint8Array(xhr.response);
             var decoded = png.decodePNG(bytes);
             tileCache[item.key] = decoded;
-            
+            putDecodedTile('tile_' + mapSource + '_' + item.key, decoded);
+
             // Cache downloaded tile in localStorage
             var base64 = arrayBufferToBase64(xhr.response);
             localStorage.setItem('tile_' + mapSource + '_' + item.key, base64);
