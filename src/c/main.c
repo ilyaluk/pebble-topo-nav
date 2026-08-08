@@ -240,6 +240,27 @@ static const VibePattern s_off_route_pattern = {
   .num_segments = ARRAY_LENGTH(s_off_route_segments),
 };
 
+// Phone-link loss: two long buzzes, distinct from every navigation vibe
+// (double-short = left, single-long = right, rapid burst = off route).
+static const uint32_t s_phone_lost_segments[] = { 600, 300, 600 };
+static const VibePattern s_phone_lost_pattern = {
+  .durations = s_phone_lost_segments,
+  .num_segments = ARRAY_LENGTH(s_phone_lost_segments),
+};
+
+// Recording runs in the phone JS, so a dead phone link means the track is
+// silently not being recorded. Two independent detectors cover the two ways
+// it dies: the Bluetooth connection dropping (phone out of range, iOS
+// jettisoning the Pebble app), and the JS runtime being suspended while the
+// link stays up -- the latter is only visible as status messages ceasing.
+static bool s_phone_connected = true;
+static time_t s_last_inbox_time = 0;
+static bool s_stale_alerted = false;
+// While recording, the phone reports every GPS fix (gpsInterval, 5s by
+// default, user-configurable). Well past any sane interval; checked from
+// the minute tick, so alert latency adds up to a minute on top.
+#define DATA_STALE_SECONDS 120
+
 // Map visibility reporting: while the map pixels cannot be seen (dashboard
 // or a menu on top, big-nav popup, Arrow Only mode) the phone should not
 // render or stream frames at all -- the transfer is the expensive part.
@@ -782,8 +803,40 @@ static void prv_set_text_if_changed(TextLayer *layer, char *buf, size_t buf_size
   text_layer_set_text(layer, buf);
 }
 
+// Shared UI for both loss detectors: stale GPS data must not keep drawing a
+// green dot and a moving arrow, so the link loss is presented as GPS gone.
+static void prv_show_phone_lost(const char *instruction) {
+  s_gps_connected = false;
+  vibes_enqueue_custom_pattern(s_phone_lost_pattern);
+  prv_set_text_if_changed(s_instruction_layer, s_instruction_text,
+                          sizeof(s_instruction_text), instruction);
+  if (s_header_layer) layer_mark_dirty(s_header_layer);
+  if (s_map_layer) layer_mark_dirty(s_map_layer);
+}
+
+static void app_connection_handler(bool connected) {
+  if (connected == s_phone_connected) {
+    return;
+  }
+  s_phone_connected = connected;
+  if (connected) {
+    // The companion pushes a full status within seconds of the JS runtime
+    // (re)starting; until then keep showing that data is not flowing yet.
+    vibes_short_pulse();
+    prv_set_text_if_changed(s_instruction_layer, s_instruction_text,
+                            sizeof(s_instruction_text),
+                            s_is_english ? "Waiting for phone..." : "Warte auf Handy...");
+  } else {
+    prv_show_phone_lost(s_is_english ? "Phone disconnected!" : "Handy getrennt!");
+  }
+}
+
 // AppMessage Callback Handlers
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
+  // Any inbound message proves the phone JS is alive; re-arm the watchdog.
+  s_last_inbox_time = time(NULL);
+  s_stale_alerted = false;
+
   Tuple *lang_tuple = dict_find(iter, MESSAGE_KEY_LANGUAGE);
   if (lang_tuple) {
     bool is_english = (lang_tuple->value->uint8 == 1);
@@ -1601,6 +1654,18 @@ static void update_time_and_duration() {
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   update_time_and_duration();
+
+  // Watchdog for the silent failure the connection service cannot see: the
+  // OS suspends the companion's JS runtime but keeps Bluetooth up. During a
+  // recording the phone reports every fix, so a long quiet gap means the
+  // track has stopped being recorded. One alert per gap; the next inbound
+  // message re-arms it.
+  if (s_recording_active && s_phone_connected && !s_stale_alerted &&
+      s_last_inbox_time > 0 &&
+      time(NULL) - s_last_inbox_time > DATA_STALE_SECONDS) {
+    s_stale_alerted = true;
+    prv_show_phone_lost(s_is_english ? "No data from phone!" : "Keine Daten vom Handy!");
+  }
 }
 
 static void compass_heading_handler(CompassHeadingData heading) {
@@ -1848,6 +1913,13 @@ static void init() {
   // Register battery state service
   battery_state_service_subscribe(battery_state_handler);
   battery_state_handler(battery_state_service_peek()); // Initial call
+
+  // Watch the phone link itself; launching while already disconnected must
+  // not fire the alert, so seed the state from a peek instead of assuming.
+  s_phone_connected = connection_service_peek_pebble_app_connection();
+  connection_service_subscribe((ConnectionHandlers) {
+    .pebble_app_connection_handler = app_connection_handler,
+  });
   
   // Register tick timer
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
@@ -1861,6 +1933,7 @@ static void init() {
 
 // App Deinitialization
 static void deinit() {
+  connection_service_unsubscribe();
   tick_timer_service_unsubscribe();
   if (s_compass_subscribed) {
     compass_service_unsubscribe();
