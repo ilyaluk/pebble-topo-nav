@@ -355,6 +355,9 @@ Pebble.addEventListener('ready', function() {
   // Update map dimensions based on loaded settings
   updateMapDimensions();
   if (storedInterval) gpsInterval = parseInt(storedInterval);
+
+  loadTileIndex();
+  console.log('Tile cache: ' + tileCacheDebugString());
   
   var storedTrack = localStorage.getItem('gpxTrack');
   if (storedTrack) {
@@ -1401,6 +1404,156 @@ function tileRecentlyFailed(storeKey) {
   return failedAt !== undefined && (Date.now() - failedAt) < TILE_FAIL_RETRY_MS;
 }
 
+// --- Persistent tile cache accounting (LRU under a byte budget) ---
+// localStorage is a shared, small pool (typically ~5 MB, also holding routes
+// and trips); at its quota every further write fails. Tiles are tracked in
+// an index (storeKey -> last-use time and size) and the least recently used
+// ones are evicted to keep the total under TILE_CACHE_MAX_BYTES.
+var TILE_CACHE_MAX_BYTES = 3.5 * 1024 * 1024;
+var TILE_INDEX_KEY = 'tileCacheIndex';
+var tileIndex = {};
+var tileCacheBytes = 0;
+var tileIndexFlushTimer = null;
+
+function tileCacheDebugString() {
+  var count = 0;
+  for (var k in tileIndex) {
+    if (tileIndex.hasOwnProperty(k)) count++;
+  }
+  return count + ' tiles, ' + (tileCacheBytes / (1024 * 1024)).toFixed(2) +
+         ' / ' + (TILE_CACHE_MAX_BYTES / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// The index itself is persisted lazily -- recency bookkeeping is not worth
+// a localStorage write per touched tile per render.
+function flushTileIndexSoon() {
+  if (tileIndexFlushTimer) return;
+  tileIndexFlushTimer = setTimeout(function() {
+    tileIndexFlushTimer = null;
+    try {
+      localStorage.setItem(TILE_INDEX_KEY, JSON.stringify(tileIndex));
+    } catch (e) {
+      console.warn('Could not persist tile index: ' + e);
+    }
+  }, 5000);
+}
+
+// Tiles stored by older app versions predate the index; adopt them with a
+// last-use of 0 so they are first in line for eviction. Key enumeration may
+// be unsupported in some PKJS runtimes -- skip silently then.
+function adoptUntrackedTiles() {
+  try {
+    var adopted = 0;
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key && key.indexOf('tile_') === 0 && !tileIndex[key]) {
+        var value = localStorage.getItem(key);
+        if (value) {
+          tileIndex[key] = { t: 0, s: value.length };
+          tileCacheBytes += value.length;
+          adopted++;
+        }
+      }
+    }
+    if (adopted) {
+      console.log('Tile cache: adopted ' + adopted + ' untracked legacy tiles');
+      flushTileIndexSoon();
+    }
+  } catch (e) {
+    // Enumeration unsupported; legacy tiles get adopted on first use instead
+  }
+}
+
+function loadTileIndex() {
+  try {
+    tileIndex = JSON.parse(localStorage.getItem(TILE_INDEX_KEY) || '{}');
+  } catch (e) {
+    tileIndex = {};
+  }
+  tileCacheBytes = 0;
+  for (var k in tileIndex) {
+    if (tileIndex.hasOwnProperty(k)) tileCacheBytes += tileIndex[k].s;
+  }
+  adoptUntrackedTiles();
+}
+
+// Refresh recency on a cache hit (adopting legacy entries the enumeration
+// sweep could not see).
+function touchTile(storeKey, size) {
+  var entry = tileIndex[storeKey];
+  if (entry) {
+    entry.t = Date.now();
+  } else {
+    tileIndex[storeKey] = { t: Date.now(), s: size };
+    tileCacheBytes += size;
+  }
+  flushTileIndexSoon();
+}
+
+function evictLRUTiles(bytesToFree) {
+  var freed = 0;
+  var evicted = 0;
+  while (freed < bytesToFree) {
+    var oldestKey = null;
+    var oldestT = Infinity;
+    for (var k in tileIndex) {
+      if (tileIndex.hasOwnProperty(k) && tileIndex[k].t < oldestT) {
+        oldestT = tileIndex[k].t;
+        oldestKey = k;
+      }
+    }
+    if (!oldestKey) break;
+    freed += tileIndex[oldestKey].s;
+    tileCacheBytes -= tileIndex[oldestKey].s;
+    delete tileIndex[oldestKey];
+    try {
+      localStorage.removeItem(oldestKey);
+    } catch (e) {}
+    evicted++;
+  }
+  if (evicted) {
+    console.log('Tile cache: evicted ' + evicted + ' LRU tiles (' +
+                Math.round(freed / 1024) + ' KB); now ' + tileCacheDebugString());
+    flushTileIndexSoon();
+  }
+}
+
+// Store a tile under the budget. allowEvict distinguishes the two callers:
+// the render path may push out older tiles (the user is looking at this one
+// right now), while prefetch must stop at the budget instead -- evicting
+// prefetched tiles to store more prefetch just burns downloads.
+// Returns false when the tile was not persisted.
+function storeTile(storeKey, base64, allowEvict) {
+  var size = base64.length;
+  var prevSize = tileIndex[storeKey] ? tileIndex[storeKey].s : 0;
+  var projected = tileCacheBytes - prevSize + size;
+  if (projected > TILE_CACHE_MAX_BYTES) {
+    if (!allowEvict) return false;
+    evictLRUTiles(projected - TILE_CACHE_MAX_BYTES);
+  }
+  try {
+    localStorage.setItem(storeKey, base64);
+  } catch (e) {
+    // Quota hit despite the budget (storage shared with routes/trips):
+    // evict harder and retry once.
+    if (!allowEvict) return false;
+    evictLRUTiles(Math.max(size * 4, 256 * 1024));
+    try {
+      localStorage.setItem(storeKey, base64);
+    } catch (e2) {
+      console.warn('Tile store failed even after eviction: ' + e2);
+      return false;
+    }
+  }
+  // Eviction above may have removed this very key; re-read its indexed size
+  // so the byte total stays consistent with the index.
+  prevSize = tileIndex[storeKey] ? tileIndex[storeKey].s : 0;
+  tileCacheBytes += size - prevSize;
+  tileIndex[storeKey] = { t: Date.now(), s: size };
+  flushTileIndexSoon();
+  return true;
+}
+
 function getDecodedTile(storeKey) {
   var tile = decodedTiles[storeKey];
   if (!tile) return null;
@@ -1556,6 +1709,7 @@ function renderAndSendMap() {
       var cachedBase64 = localStorage.getItem(storeKey);
 
       if (cachedBase64) {
+        touchTile(storeKey, cachedBase64.length);
         try {
           var bytes = base64ToUint8Array(cachedBase64);
           var decoded = png.decodePNG(bytes);
@@ -1600,11 +1754,12 @@ function renderAndSendMap() {
             var decoded = png.decodePNG(bytes);
             tileCache[item.key] = decoded;
             putDecodedTile(itemStoreKey, decoded);
-
-            // Cache downloaded tile in localStorage
-            var base64 = arrayBufferToBase64(xhr.response);
-            localStorage.setItem(itemStoreKey, base64);
             delete failedTiles[itemStoreKey];
+
+            // Cache in localStorage, evicting LRU tiles for room; a failed
+            // store only costs a future re-download, the decoded tile is
+            // already usable for this render.
+            storeTile(itemStoreKey, arrayBufferToBase64(xhr.response), true);
           } catch (e) {
             console.log('Error decoding fetched tile ' + item.key + ': ' + e);
             failedTiles[itemStoreKey] = Date.now();
@@ -1727,7 +1882,7 @@ function doRenderAndChunkSend(tileCache, requiredKeys) {
 // Background Tile Cacher along the GPX Track. Prefetches at the zoom that is
 // actually being displayed -- caching a level nobody looks at means every
 // tile on the trail still goes over the cellular radio at view time.
-var PREFETCH_TILE_CAP = 200; // ~5MB localStorage budget shared with settings
+var PREFETCH_TILE_CAP = 200; // bounds per-run work; storeTile's byte budget is the hard cap
 var prefetchRunToken = 0;
 var prefetchDebounceTimer = null;
 
@@ -1772,7 +1927,7 @@ function cacheTrackTiles(track) {
       return; // superseded
     }
     if (idx >= tileKeys.length) {
-      console.log('Offline tile caching fully completed!');
+      console.log('Offline tile caching fully completed! (' + tileCacheDebugString() + ')');
       return;
     }
 
@@ -1794,12 +1949,10 @@ function cacheTrackTiles(track) {
 
     xhr.onload = function() {
       if (xhr.status === 200) {
-        try {
-          var base64 = arrayBufferToBase64(xhr.response);
-          localStorage.setItem(storeKey, base64);
+        if (storeTile(storeKey, arrayBufferToBase64(xhr.response), false)) {
           delete failedTiles[storeKey];
-        } catch (e) {
-          console.warn('LocalStorage full, stopping offline caching.');
+        } else {
+          console.log('Tile cache budget reached, stopping prefetch (' + tileCacheDebugString() + ')');
           return;
         }
       } else {
