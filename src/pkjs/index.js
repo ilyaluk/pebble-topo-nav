@@ -1255,6 +1255,11 @@ function updateWatchNavigationAndMap() {
     }
     var minDist = found.minDist;
     var closestIdx = found.closestIdx;
+    // The closest match can be the final track point, where "the point
+    // after it" does not exist; all lookahead math targets nextIdx instead
+    // of closestIdx + 1 so reaching the destination cannot read past the
+    // track (remaining distances degrade to the distance to the last point).
+    var nextIdx = Math.min(closestIdx + 1, trackLengthMinusOne);
 
     // Save closest index for map rendering (gray out walked part)
     if (closestIdx !== closestTrackPointIdx) {
@@ -1266,8 +1271,8 @@ function updateWatchNavigationAndMap() {
     var cumDist = trackIndex.cumDist;
     var walkedDist = closestIdx >= 1 ? cumDist[closestIdx - 1] : 0;
     walkedDist += haversineDistance(gpxTrack[closestIdx].lat, gpxTrack[closestIdx].lon, currentLocation.lat, currentLocation.lon);
-    var remDist = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx + 1].lat, gpxTrack[closestIdx + 1].lon);
-    remDist += cumDist[trackLengthMinusOne] - cumDist[closestIdx + 1];
+    var remDist = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[nextIdx].lat, gpxTrack[nextIdx].lon);
+    remDist += cumDist[trackLengthMinusOne] - cumDist[nextIdx];
     payload.TRIP_DISTANCE = (walkedDist / 1000).toFixed(1) + ' ' + (remDist / 1000).toFixed(1);
 
     // Elevation stats from the prefix sums
@@ -1298,7 +1303,7 @@ function updateWatchNavigationAndMap() {
       
       // 2. Look ahead for significant turns
       var turnIdx = -1;
-      var distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[closestIdx + 1].lat, gpxTrack[closestIdx + 1].lon);
+      var distToTurn = haversineDistance(currentLocation.lat, currentLocation.lon, gpxTrack[nextIdx].lat, gpxTrack[nextIdx].lon);
       var turnBearingDiff = 0;
 
       // Check all remaining trackpoints for bearing changes and measure the
@@ -1319,7 +1324,7 @@ function updateWatchNavigationAndMap() {
       }
       // Add the distance from the next track point to the turn (or track
       // end), from the prefix sums.
-      distToTurn += cumDist[turnIdx !== -1 ? turnIdx : trackLengthMinusOne] - cumDist[closestIdx + 1];
+      distToTurn += cumDist[turnIdx !== -1 ? turnIdx : trackLengthMinusOne] - cumDist[nextIdx];
 
       if (distToTurn > 1000) {
          payload.NAV_DISTANCE = (distToTurn / 1000).toFixed(1) + 'km';
