@@ -245,6 +245,16 @@ static const VibePattern s_off_route_pattern = {
 // render or stream frames at all -- the transfer is the expensive part.
 static bool s_map_reported_visible = true;
 static uint8_t s_overlay_windows = 0; // menu/confirm windows above the map
+// Set while a visibility report is the in-flight outbox message. Only one
+// outbox message can be in flight, so the next sent/failed callback belongs
+// to it; a failure must roll back s_map_reported_visible or the phone would
+// be left permanently out of sync on what it believes the watch shows.
+static bool s_visibility_msg_inflight = false;
+// Failed reports resend immediately, but bounded: while disconnected every
+// attempt fails and an unbounded loop would keep poking the radio. After
+// the burst, recovery falls back to the retry on the next inbound message.
+#define VISIBILITY_RETRY_MAX 3
+static uint8_t s_visibility_retry_count = 0;
 
 static bool prv_map_is_visible(void) {
   return !s_show_dashboard && !s_big_nav_active && s_nav_view_mode != 2 &&
@@ -270,9 +280,15 @@ static void prv_update_compass_subscription(void) {
   }
 }
 
+static bool s_visibility_last_desired = true;
+
 static void prv_report_map_visibility(void) {
   prv_update_compass_subscription(); // compass need tracks the same condition
   bool visible = prv_map_is_visible();
+  if (visible != s_visibility_last_desired) {
+    s_visibility_last_desired = visible;
+    s_visibility_retry_count = 0; // a fresh transition gets a fresh burst
+  }
   if (visible == s_map_reported_visible) {
     return;
   }
@@ -283,6 +299,7 @@ static void prv_report_map_visibility(void) {
   dict_write_uint8(iter, MESSAGE_KEY_MAP_VISIBLE, visible ? 1 : 0);
   if (app_message_outbox_send() == APP_MSG_OK) {
     s_map_reported_visible = visible;
+    s_visibility_msg_inflight = true;
   }
 }
 
@@ -1083,8 +1100,26 @@ static void inbox_dropped_handler(AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Inbox dropped: %d", reason);
 }
 
+static void outbox_sent_handler(DictionaryIterator *iter, void *context) {
+  if (s_visibility_msg_inflight) {
+    s_visibility_msg_inflight = false;
+    s_visibility_retry_count = 0;
+  }
+}
+
 static void outbox_failed_handler(DictionaryIterator *iter, AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox failed: %d", reason);
+  if (s_visibility_msg_inflight) {
+    s_visibility_msg_inflight = false;
+    // The report never reached the phone: it still holds the previous
+    // (opposite) state. Roll back, and resend while the burst allows --
+    // the failed callback means the outbox is free again.
+    s_map_reported_visible = !s_map_reported_visible;
+    if (s_visibility_retry_count < VISIBILITY_RETRY_MAX) {
+      s_visibility_retry_count++;
+      prv_report_map_visibility();
+    }
+  }
 }
 
 static void update_ui_languages() {
@@ -1804,6 +1839,7 @@ static void init() {
   // Register AppMessage listeners
   app_message_register_inbox_received(inbox_received_handler);
   app_message_register_inbox_dropped(inbox_dropped_handler);
+  app_message_register_outbox_sent(outbox_sent_handler);
   app_message_register_outbox_failed(outbox_failed_handler);
   
   // Inbox sized for one map chunk per message, outbox for small commands
