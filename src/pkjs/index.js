@@ -1306,7 +1306,10 @@ function updateWatchNavigationAndMap() {
       var previousBearing = trackIndex.bearings[closestIdx];
       for (var idx = closestIdx + 1; idx < trackLengthMinusOne; idx++) {
         var nextBearing = trackIndex.bearings[idx];
-        var diff = (nextBearing - previousBearing + 180) % 360 - 180; // diff in [-180, 180]
+        // +540 keeps the dividend positive: JS % keeps the sign of the
+        // dividend, so +180 alone would map raw diffs below -180 outside
+        // the target range and flip the turn direction.
+        var diff = ((nextBearing - previousBearing + 540) % 360) - 180; // diff in [-180, 180)
         if (Math.abs(diff) > 30) {
           turnIdx = idx;
           turnBearingDiff = diff;
