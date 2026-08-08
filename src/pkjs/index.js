@@ -1199,8 +1199,8 @@ function updateWatchNavigationAndMap() {
           turnBearingDiff = diff;
           break;
         }
-        distToTurn += haversineDistance(gpxTrack[idx].lat, gpxTrack[idx].lon, gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon);;;
-        previousBaring = nextBearing;
+        distToTurn += haversineDistance(gpxTrack[idx].lat, gpxTrack[idx].lon, gpxTrack[idx + 1].lat, gpxTrack[idx + 1].lon);
+        previousBearing = nextBearing;
       }
 
       if (distToTurn > 1000) {
