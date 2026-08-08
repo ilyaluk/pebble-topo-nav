@@ -251,7 +251,27 @@ static bool prv_map_is_visible(void) {
          s_overlay_windows == 0;
 }
 
+// The compass only ever drives the direction arrow drawn on the map, so the
+// magnetometer should be powered exactly while the map is visible.
+static void compass_heading_handler(CompassHeadingData heading);
+static bool s_compass_subscribed = false;
+
+static void prv_update_compass_subscription(void) {
+  bool needed = prv_map_is_visible();
+  if (needed == s_compass_subscribed) {
+    return;
+  }
+  s_compass_subscribed = needed;
+  if (needed) {
+    compass_service_subscribe(compass_heading_handler);
+    compass_service_set_heading_filter(6 * (TRIG_MAX_ANGLE / 360));
+  } else {
+    compass_service_unsubscribe();
+  }
+}
+
 static void prv_report_map_visibility(void) {
+  prv_update_compass_subscription(); // compass need tracks the same condition
   bool visible = prv_map_is_visible();
   if (visible == s_map_reported_visible) {
     return;
@@ -1525,6 +1545,12 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 }
 
 static void compass_heading_handler(CompassHeadingData heading) {
+  // While moving, get_current_bearing() uses the GPS course and ignores the
+  // compass entirely -- a heading event cannot change the drawn arrow, so
+  // skip the redraw.
+  if (s_gps_speed_cms > 100 && s_gps_heading >= 0) {
+    return;
+  }
   // Force redraw map layer on compass updates (if map is active/visible)
   if (s_map_layer && !s_show_dashboard) {
     layer_mark_dirty(s_map_layer);
@@ -1767,17 +1793,18 @@ static void init() {
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
   update_time_and_duration(); // Initial call
   
-  // Subscribe to compass service
-  compass_service_subscribe(compass_heading_handler);
-  compass_service_set_heading_filter(2 * (TRIG_MAX_ANGLE / 360));
-  
+  // Compass is subscribed on demand, only while the map arrow is visible
+  prv_update_compass_subscription();
+
   window_stack_push(s_main_window, true);
 }
 
 // App Deinitialization
 static void deinit() {
   tick_timer_service_unsubscribe();
-  compass_service_unsubscribe();
+  if (s_compass_subscribed) {
+    compass_service_unsubscribe();
+  }
   battery_state_service_unsubscribe();
   window_destroy(s_main_window);
 }
