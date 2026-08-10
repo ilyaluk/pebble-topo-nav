@@ -42,7 +42,7 @@ Default platform: emery (Pebble Time 2). Never pass --vnc (mixed display flags k
 - `pebble screenshot out.png --no-open` — agents read the PNG.
 - `pebble emu-button click up|down|select|back`; long-press: `--duration 800` (record toggle).
 - `pebble logs > f.txt 2>&1 &` BEFORE acting; reinstall drops the stream. Shows C APP_LOG + pkjs console.log. (`QemuInboundPacket.footer` warnings are noise.)
-- pypkjs geolocation is IP-based, single-shot, dead in sandbox — use the mockGps hook.
+- pypkjs geolocation is IP-based, single-shot, dead in sandbox. Fix: `python3 tools/patch-pypkjs-gps.py && pebble kill`, then `echo "lat,lon[,alt[,speed[,heading]]]" > ~/.pebble-fake-gps` feeds the app's real GPS path — rewrite the file to move (watchPosition polls it every 1s); re-apply after pebble-tool upgrades. Alternative without patching: the mockGps setting below.
 - Map e2e without external endpoints:
   ```
   python3 tools/mock-tile-server.py &
