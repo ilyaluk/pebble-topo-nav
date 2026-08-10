@@ -7,6 +7,8 @@
 - **pypkjs Fake-GPS Patcher:** `tools/patch-pypkjs-gps.py` swaps the emulator's IP-based geolocation for a file-driven one (`~/.pebble-fake-gps`), so the app's real GPS path runs in the emulator with live-movable positions, repeating `watchPosition`, and proper `PositionError` objects.
 
 ### Fixed
+- **Route IDs Overflowed int32:** New routes got `id: Date.now()` (~1.8e12), which exceeds AppMessage's int32 range; `Pebble.sendAppMessage` then threw on every status send, killing navigation and map updates until storage was wiped. Ids are now masked to 31 bits at creation, and `sendStatusMessage` catches serialization throws so one bad value can no longer take down the GPS callback chain.
+- **Missing `gpsInterval` Persisted as "undefined":** The only setting read without a default now falls back to 5 seconds.
 - **Emulator JS Crash on GPS Failure:** pypkjs delivers geolocation errors without an error object; the unguarded `err.message` access tore down the whole JS runtime.
 
 ### Changed

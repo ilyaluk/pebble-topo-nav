@@ -193,16 +193,23 @@ function sendStatusMessage(payload, onSuccess, onFailure) {
     return;
   }
 
-  Pebble.sendAppMessage(delta, function() {
-    for (var i = 0; i < changedKeys.length; i++) {
-      if (changedKeys[i] !== 'VIBRATE_ALERT') {
-        lastSentStatus[changedKeys[i]] = delta[changedKeys[i]];
+  // sendAppMessage throws synchronously on unserializable values (e.g. an
+  // int32-overflowing number); uncaught, that kills the GPS callback chain.
+  try {
+    Pebble.sendAppMessage(delta, function() {
+      for (var i = 0; i < changedKeys.length; i++) {
+        if (changedKeys[i] !== 'VIBRATE_ALERT') {
+          lastSentStatus[changedKeys[i]] = delta[changedKeys[i]];
+        }
       }
-    }
-    if (onSuccess) onSuccess();
-  }, function(e) {
-    if (onFailure) onFailure(e);
-  });
+      if (onSuccess) onSuccess();
+    }, function(e) {
+      if (onFailure) onFailure(e);
+    });
+  } catch (err) {
+    console.log('sendStatusMessage failed: ' + err);
+    if (onFailure) onFailure(err);
+  }
 }
 
 // Haversine formula to compute distance in meters
@@ -870,7 +877,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var settings = JSON.parse(responseStr);
       console.log('Received settings: ' + JSON.stringify(settings).substring(0, 100) + '...');
       
-      gpsInterval = settings.gpsInterval;
+      gpsInterval = parseInt(settings.gpsInterval, 10) || 5;
       localStorage.setItem('gpsInterval', gpsInterval);
       
       var lang = settings.language || 'en';
@@ -923,7 +930,8 @@ Pebble.addEventListener('webviewclosed', function(e) {
       if (settings.newRoute) {
         var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
         var newR = {
-          id: Date.now(),
+          // Route ids travel over AppMessage as int32; raw Date.now() overflows
+          id: Date.now() & 0x7FFFFFFF,
           name: settings.newRoute.name || ('Route ' + (savedRoutes.length + 1)),
           points: settings.newRoute.points
         };
@@ -945,7 +953,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
         localStorage.setItem('gpxTrack', JSON.stringify(gpxTrack));
         if (gpxTrack.length > 0) {
           var savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-          var autoId = Date.now();
+          var autoId = Date.now() & 0x7FFFFFFF;
           var newR = {
             id: autoId,
             name: 'Import ' + new Date().toLocaleDateString(),
