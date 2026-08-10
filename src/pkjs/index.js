@@ -887,11 +887,6 @@ Pebble.addEventListener('webviewclosed', function(e) {
         oldMapSource = '(custom url changed)'; // force the reload path below
       }
 
-      // Emulator harness hook, not exposed in the settings UI (see AGENTS.md)
-      if (settings.mockGps !== undefined) {
-        localStorage.setItem('mockGps', settings.mockGps);
-      }
-      
       var fullscreen = settings.fullscreen || false;
       var oldFullscreen = localStorage.getItem('fullscreen') === 'true';
       localStorage.setItem('fullscreen', fullscreen ? 'true' : 'false');
@@ -1061,30 +1056,6 @@ function restartGPSTracking() {
   }
 
   stopGPSTracking();
-
-  // Emulator harness hook: a mockGps setting replaces the real geolocation
-  // feed, since pypkjs has no controllable GPS. Value: "lat,lon[;lat,lon...]"
-  // -- one fix per gpsInterval tick, holding the last point once exhausted.
-  var mockGpsPath = localStorage.getItem('mockGps');
-  if (mockGpsPath) {
-    var mockPoints = mockGpsPath.split(';').map(function(p) {
-      var ll = p.split(',');
-      return { latitude: parseFloat(ll[0]), longitude: parseFloat(ll[1]) };
-    });
-    var mockIdx = 0;
-    var mockFix = function() {
-      var pt = mockPoints[Math.min(mockIdx++, mockPoints.length - 1)];
-      onGPSSuccess({
-        coords: { latitude: pt.latitude, longitude: pt.longitude,
-                  speed: 1.5, heading: 0, altitude: 500, accuracy: 5 },
-        timestamp: Date.now()
-      });
-    };
-    gpsPollTimer = setInterval(mockFix, Math.max(gpsInterval, 1) * 1000);
-    mockFix();
-    console.log('Mock GPS active: ' + mockPoints.length + ' point(s)');
-    return;
-  }
 
   if (isNavigating) {
     var options = {

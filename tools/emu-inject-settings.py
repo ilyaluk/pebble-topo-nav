@@ -10,8 +10,7 @@ Usage:
     python3 tools/emu-inject-settings.py '{"mapSource":"custom", ...}'
     python3 tools/emu-inject-settings.py < settings.json
 
-The JSON mirrors what config.html submits; see its settings object. Extra
-harness-only keys understood by index.js: customTileUrl, mockGps.
+The JSON mirrors what config.html submits; see its settings object.
 """
 
 import glob
