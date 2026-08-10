@@ -1884,12 +1884,8 @@ static void menu_window_unload(Window *window) {
 
 // App Initialization
 static void init() {
-  if (persist_exists(PERSIST_KEY_LANGUAGE)) {
-    s_is_english = persist_read_bool(PERSIST_KEY_LANGUAGE);
-  } else {
-    s_is_english = false;
-  }
-  
+  s_is_english = persist_exists(PERSIST_KEY_LANGUAGE) ? persist_read_bool(PERSIST_KEY_LANGUAGE) : true;
+
   s_dashboard_fields = persist_exists(PERSIST_KEY_DASHBOARD_FIELDS) ? persist_read_int(PERSIST_KEY_DASHBOARD_FIELDS) : 31;
 
   s_main_window = window_create();

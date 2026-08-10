@@ -29,6 +29,11 @@ Build the app:
 pebble build
 ```
 
+Check settings-page translations (keys, unused entries, markup/English drift):
+```
+node tools/check-i18n.js
+```
+
 # Emulator testing
 
 Default platform: emery (Pebble Time 2). Never pass --vnc (mixed display flags kill and respawn QEMU mid-session).
