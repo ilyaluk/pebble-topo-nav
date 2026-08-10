@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- **Custom Tile Server:** A `custom` map source with a `customTileUrl` `{z}/{x}/{y}` template setting. Used by the emulator test harness (`tools/mock-tile-server.py`, `tools/emu-inject-settings.py`) to render maps without external endpoints; no settings UI yet.
+- **Mock GPS Harness Hook:** A `mockGps` setting (`"lat,lon[;lat,lon...]"`) replays synthetic fixes in place of real geolocation, enabling emulator e2e tests.
+
+### Fixed
+- **Emulator JS Crash on GPS Failure:** pypkjs delivers geolocation errors without an error object; the unguarded `err.message` access tore down the whole JS runtime.
+
 ### Changed
 - **English Is the Default Language:** Fresh installs start in English on both the watch and the settings page; German remains selectable in the settings.
 - **Settings Page Localization:** Static page text is translated from `data-i18n` attributes instead of per-element assignments, so a new label needs only its attribute and a dictionary entry. `tools/check-i18n.js` fails on keys missing from a dictionary, unused entries, and lookups of absent elements.

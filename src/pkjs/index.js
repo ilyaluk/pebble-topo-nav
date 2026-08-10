@@ -315,7 +315,17 @@ function findClosestOnTrack(startIdx, endIdx) {
 function getTileUrl(z, x, y) {
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
   var subdomains, sub;
-  
+
+  // Custom tile server: URL template with {z}/{x}/{y} placeholders,
+  // e.g. http://localhost:8747/{z}/{x}/{y}.png
+  if (mapSource === 'custom') {
+    var template = localStorage.getItem('customTileUrl');
+    if (template) {
+      return template.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+    }
+    mapSource = 'opentopomap';
+  }
+
   // 'hikebikemap' kept as a legacy alias: the old tiles.wmflabs.org server was
   // decommissioned by Wikimedia, so previously-saved settings now resolve to CyclOSM.
   if (mapSource === 'cyclosm' || mapSource === 'hikebikemap') {
@@ -868,6 +878,18 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var mapSource = settings.mapSource || 'opentopomap';
       var oldMapSource = localStorage.getItem('mapSource') || 'opentopomap';
       localStorage.setItem('mapSource', mapSource);
+
+      var oldCustomTileUrl = localStorage.getItem('customTileUrl') || '';
+      var customTileUrl = settings.customTileUrl !== undefined ? settings.customTileUrl : oldCustomTileUrl;
+      localStorage.setItem('customTileUrl', customTileUrl);
+      if (mapSource === 'custom' && customTileUrl !== oldCustomTileUrl) {
+        oldMapSource = '(custom url changed)'; // force the reload path below
+      }
+
+      // Emulator harness hook, not exposed in the settings UI (see AGENTS.md)
+      if (settings.mockGps !== undefined) {
+        localStorage.setItem('mockGps', settings.mockGps);
+      }
       
       var fullscreen = settings.fullscreen || false;
       var oldFullscreen = localStorage.getItem('fullscreen') === 'true';
@@ -1038,6 +1060,30 @@ function restartGPSTracking() {
   }
 
   stopGPSTracking();
+
+  // Emulator harness hook: a mockGps setting replaces the real geolocation
+  // feed, since pypkjs has no controllable GPS. Value: "lat,lon[;lat,lon...]"
+  // -- one fix per gpsInterval tick, holding the last point once exhausted.
+  var mockGpsPath = localStorage.getItem('mockGps');
+  if (mockGpsPath) {
+    var mockPoints = mockGpsPath.split(';').map(function(p) {
+      var ll = p.split(',');
+      return { latitude: parseFloat(ll[0]), longitude: parseFloat(ll[1]) };
+    });
+    var mockIdx = 0;
+    var mockFix = function() {
+      var pt = mockPoints[Math.min(mockIdx++, mockPoints.length - 1)];
+      onGPSSuccess({
+        coords: { latitude: pt.latitude, longitude: pt.longitude,
+                  speed: 1.5, heading: 0, altitude: 500, accuracy: 5 },
+        timestamp: Date.now()
+      });
+    };
+    gpsPollTimer = setInterval(mockFix, Math.max(gpsInterval, 1) * 1000);
+    mockFix();
+    console.log('Mock GPS active: ' + mockPoints.length + ' point(s)');
+    return;
+  }
 
   if (isNavigating) {
     var options = {
