@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Changed
+- **English Is the Default Language:** Fresh installs start in English on both the watch and the settings page; German remains selectable in the settings.
+- **Settings Page Localization:** Static page text is translated from `data-i18n` attributes instead of per-element assignments, so a new label needs only its attribute and a dictionary entry. `tools/check-i18n.js` fails on keys missing from a dictionary, unused entries, and lookups of absent elements.
 - **Settings Page Bundled Into the App:** The settings page is embedded in the app and opened as a data URI instead of being fetched from `sirtob1.github.io`. It no longer needs a connection (except the trip history map), cannot drift from the installed version, and stops routes and trip history from travelling through a third-party URL. Settings are injected into the page rather than passed as query parameters, removing the URL-length limit that truncated the routes list.
 
 ## [2.8.0] - 2026-08-05

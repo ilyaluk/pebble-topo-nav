@@ -447,7 +447,7 @@ Pebble.addEventListener('ready', function() {
 // Helper to open the configuration url with all required parameters
 function openConfigPage() {
   var interval = localStorage.getItem('gpsInterval') || '5';
-  var lang = localStorage.getItem('language') || 'de';
+  var lang = localStorage.getItem('language') || 'en';
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
   var fullscreen = localStorage.getItem('fullscreen') || 'false';
   var showBreadcrumbs = localStorage.getItem('showBreadcrumbs') !== 'false';
@@ -862,7 +862,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
       gpsInterval = settings.gpsInterval;
       localStorage.setItem('gpsInterval', gpsInterval);
       
-      var lang = settings.language || 'de';
+      var lang = settings.language || 'en';
       localStorage.setItem('language', lang);
       
       var mapSource = settings.mapSource || 'opentopomap';
@@ -1177,7 +1177,7 @@ function onGPSError(err) {
   }
   gpsErrorActive = true;
 
-  var isEnglish = localStorage.getItem('language') === 'en';
+  var isEnglish = localStorage.getItem('language') !== 'de';
   var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   // Notify watch of lost connection
   sendStatusMessage({
@@ -1195,7 +1195,7 @@ function onGPSError(err) {
 
 // Perform calculations and send updates to watch
 function updateWatchNavigationAndMap() {
-  var isEnglish = localStorage.getItem('language') === 'en';
+  var isEnglish = localStorage.getItem('language') !== 'de';
   var activeRouteId = parseInt(localStorage.getItem('activeRouteId') || '0', 10);
   var fullscreenMode = localStorage.getItem('fullscreen') === 'true' ? 1 : 0;
   

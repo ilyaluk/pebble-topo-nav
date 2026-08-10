@@ -85,7 +85,7 @@ static bool s_gps_connected = false;
 static bool s_off_route = false;
 static bool s_recording_active = false;
 static int s_nav_bearing = -1; // -1 = no instruction, 0 = straight, 90 = right, 180 = uturn, 270 = left
-static bool s_is_english = false;
+static bool s_is_english = true;
 static int s_active_count = 0;
 static void update_ui_languages(void);
 static void layout_dashboard(void);
