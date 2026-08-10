@@ -1167,7 +1167,9 @@ function getHeadingString(heading, isEnglish) {
 }
 
 function onGPSError(err) {
-  console.log('GPS Error: ' + err.message);
+  // pypkjs (emulator) invokes the failure callback with no argument; an
+  // unguarded property access here would kill the whole JS runtime.
+  console.log('GPS Error: ' + (err && err.message ? err.message : 'unknown'));
 
   // Error state is persistent on the watch until a successful fix clears
   // it; repeated errors (a 10s timeout loop in bad signal) carry no new
