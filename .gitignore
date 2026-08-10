@@ -1,5 +1,6 @@
 # Pebble build artifacts
 /build/
+src/pkjs/config_page.js
 .lock-waf_*
 .lock-wscript
 

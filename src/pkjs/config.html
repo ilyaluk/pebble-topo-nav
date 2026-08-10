@@ -394,6 +394,11 @@
   </div>
 </div>
 
+<!-- Replaced with a `window.TOPONAV_PARAMS = {...};` assignment when index.js
+     serves this page as a bundled data URI. Left empty when the page is loaded
+     from a URL, in which case the settings come from the query string. -->
+<script>/*$$PARAMS$$*/</script>
+
 <script>
   // State Variables
   var trackPoints = [];
@@ -938,8 +943,13 @@
     window.location.href = location;
   });
 
-  // Load current settings from URL query parameters
+  // Load current settings from the injected params, or from the URL query
+  // string when this page is loaded from a hosted copy.
   function getQueryParam(name) {
+    if (window.TOPONAV_PARAMS && window.TOPONAV_PARAMS.hasOwnProperty(name)) {
+      var injected = window.TOPONAV_PARAMS[name];
+      return (injected === null || injected === undefined) ? null : String(injected);
+    }
     var query = window.location.search.substring(1);
     var vars = query.split("&");
     for (var i = 0; i < vars.length; i++) {

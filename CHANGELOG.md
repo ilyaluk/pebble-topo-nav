@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Settings Page Bundled Into the App:** The settings page is embedded in the app and opened as a data URI instead of being fetched from `sirtob1.github.io`. It no longer needs a connection (except the trip history map), cannot drift from the installed version, and stops routes and trip history from travelling through a third-party URL. Settings are injected into the page rather than passed as query parameters, removing the URL-length limit that truncated the routes list.
+
 ## [2.8.0] - 2026-08-05
 
 ### Changed
