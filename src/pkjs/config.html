@@ -253,7 +253,11 @@
       <option value="cyclosm" data-i18n="mapCyclOSM">CyclOSM (Outdoor, Hiking & Cycling)</option>
       <option value="mtbmap" data-i18n="mapMtbMap">MtbMap (High-contrast Trails)</option>
       <option value="osm" data-i18n="mapOsm">OpenStreetMap Standard (Fast / Clean)</option>
+      <option value="custom" data-i18n="mapCustom">Custom Tile Server</option>
     </select>
+
+    <label for="custom-tile-url" id="custom-tile-url-label" data-i18n="customTileUrlLabel" style="margin-top: 15px; display: none;">Custom Tile URL ({z}/{x}/{y} template)</label>
+    <input type="text" id="custom-tile-url" placeholder="https://example.com/{z}/{x}/{y}.png" style="display: none; width: 100%; background-color: #2b2b2b; border: 1px solid var(--border-color); color: var(--text-color); padding: 10px; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; margin-top: 5px;">
 
     <label for="fullscreen-map" data-i18n="fullscreenLabel" style="margin-top: 15px;">Fullscreen Mode (Map)</label>
     <select id="fullscreen-map">
@@ -457,6 +461,8 @@
       mapCyclOSM: "CyclOSM (Outdoor, Wander- & Radwege)",
       mapMtbMap: "MtbMap (Wander- & Radwege)",
       mapOsm: "OpenStreetMap Standard (Schnell / Klares Design)",
+      mapCustom: "Eigener Tile-Server",
+      customTileUrlLabel: "Eigene Tile-URL ({z}/{x}/{y}-Vorlage)",
       fullscreenLabel: "Vollbild-Modus (Karte)",
       fullscreenOn: "An (Keine Header/Footer)",
       fullscreenOff: "Aus (Standardlayout)",
@@ -540,6 +546,8 @@
       mapCyclOSM: "CyclOSM (Outdoor, Hiking & Cycling)",
       mapMtbMap: "MtbMap (High-contrast Trails)",
       mapOsm: "OpenStreetMap Standard (Fast / Clean)",
+      mapCustom: "Custom Tile Server",
+      customTileUrlLabel: "Custom Tile URL ({z}/{x}/{y} template)",
       fullscreenLabel: "Fullscreen Mode (Map)",
       fullscreenOn: "On (No Header/Footer)",
       fullscreenOff: "Off (Standard Layout)",
@@ -924,6 +932,7 @@
       gpsInterval: gpsInterval,
       language: appLang,
       mapSource: mapSource,
+      customTileUrl: document.getElementById("custom-tile-url").value.trim(),
       fullscreen: fullscreen,
       showBreadcrumbs: showBreadcrumbs,
       navViewMode: navViewMode,
@@ -980,9 +989,18 @@
     }
   }
 
+  function updateCustomTileUrlVisibility() {
+    var show = document.getElementById("map-source").value === "custom";
+    document.getElementById("custom-tile-url-label").style.display = show ? "" : "none";
+    document.getElementById("custom-tile-url").style.display = show ? "" : "none";
+  }
+  document.getElementById("map-source").addEventListener("change", updateCustomTileUrlVisibility);
+
   setSelectByValue("gps-interval", getQueryParam("interval"));
   setSelectByValue("app-lang", getQueryParam("lang"));
   setSelectByValue("map-source", getQueryParam("map"));
+  document.getElementById("custom-tile-url").value = getQueryParam("custom_tile_url") || "";
+  updateCustomTileUrlVisibility();
   setSelectByValue("fullscreen-map", getQueryParam("fullscreen"));
   setSelectByValue("show-breadcrumbs", getQueryParam("show_breadcrumbs"));
   setSelectByValue("nav-view-mode", getQueryParam("nav_view_mode"));
@@ -1284,6 +1302,12 @@
   var leafletMapInstance = null;
 
   function getLeafletTileUrl(mapSource) {
+    if (mapSource === 'custom') {
+      // Leaflet consumes the same {z}/{x}/{y} template directly
+      var custom = document.getElementById("custom-tile-url").value.trim();
+      if (custom) return custom;
+      mapSource = 'opentopomap';
+    }
     if (mapSource === 'cyclosm' || mapSource === 'hikebikemap') {
       return 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
     } else if (mapSource === 'mtbmap') {

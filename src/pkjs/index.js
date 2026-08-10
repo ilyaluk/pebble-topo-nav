@@ -499,6 +499,7 @@ function openConfigPage() {
     interval: interval,
     lang: lang,
     map: mapSource,
+    custom_tile_url: localStorage.getItem('customTileUrl') || '',
     fullscreen: fullscreen,
     show_breadcrumbs: showBreadcrumbs ? 'true' : 'false',
     nav_view_mode: localStorage.getItem('navViewMode') || '0',

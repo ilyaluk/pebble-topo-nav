@@ -29,7 +29,23 @@ Build the app:
 pebble build
 ```
 
-TODO: testing
+# Emulator testing
+
+Default platform: emery (Pebble Time 2). Never pass --vnc (mixed display flags kill and respawn QEMU mid-session).
+
+- `pebble build && pebble install --emulator emery` — usually auto-launches; verify via screenshot, else: `emu-button click select` twice (launcher).
+- `pebble screenshot out.png --no-open` — agents read the PNG.
+- `pebble emu-button click up|down|select|back`; long-press: `--duration 800` (record toggle).
+- `pebble logs > f.txt 2>&1 &` BEFORE acting; reinstall drops the stream. Shows C APP_LOG + pkjs console.log. (`QemuInboundPacket.footer` warnings are noise.)
+- pypkjs geolocation is IP-based, single-shot, dead in sandbox — use the mockGps hook.
+- Map e2e without external endpoints:
+  ```
+  python3 tools/mock-tile-server.py &
+  python3 tools/emu-inject-settings.py '{"gpsInterval":5,"language":"en","mapSource":"custom","customTileUrl":"http://localhost:8747/{z}/{x}/{y}.png","fullscreen":false,"showBreadcrumbs":true,"navViewMode":0,"dashboardFields":31,"mockGps":"47.3769,8.5417"}'
+  ```
+  mockGps: `"lat,lon[;lat,lon...]"`, one fix per gpsInterval — feed a path for nav/turn-alert e2e. Inject routes via the newRoute settings key.
+- Other inputs: emu-compass, emu-bt-connection (link watchdog), emu-battery, send-app-message (raw dict to watch), gdb.
+- Cleanup: `pebble kill`; `pebble wipe` resets JS localStorage.
 
 # Docs references:
 

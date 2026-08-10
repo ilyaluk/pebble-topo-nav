@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- **Custom Tile Server:** A `custom` map source with a `customTileUrl` `{z}/{x}/{y}` template setting. Used by the emulator test harness (`tools/mock-tile-server.py`, `tools/emu-inject-settings.py`) to render maps without external endpoints; no settings UI yet.
+- **Custom Tile Server:** A `custom` map source with a `{z}/{x}/{y}` URL template field in the settings page (also previews in the Leaflet trip map). Used by the emulator test harness (`tools/mock-tile-server.py`, `tools/emu-inject-settings.py`) to render maps without external endpoints.
 - **Mock GPS Harness Hook:** A `mockGps` setting (`"lat,lon[;lat,lon...]"`) replays synthetic fixes in place of real geolocation, enabling emulator e2e tests.
 
 ### Fixed
