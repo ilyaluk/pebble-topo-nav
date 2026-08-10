@@ -586,26 +586,26 @@ static void dashboard_update_proc(Layer *layer, GContext *ctx) {
   
   int rows = 1, cols = 1;
   if (s_active_count == 2) { rows = 2; cols = 1; }
-  else if (s_active_count == 3 || s_active_count == 4) { rows = 2; cols = 2; }
-  
+  else if (s_active_count >= 3) { cols = 2; rows = (s_active_count + 1) / 2; }
+
   int coords_h = 36;
   int dynamic_h = bounds.size.h - coords_h;
   int row_h = dynamic_h / rows;
-  
+
   // Draw separation lines
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_stroke_width(ctx, 2);
-  
+
   // Horizontal lines
   for (int r = 1; r < rows; r++) {
     graphics_draw_line(ctx, GPoint(10, r * row_h), GPoint(bounds.size.w - 10, r * row_h));
   }
-  
+
   // Vertical lines
   if (cols > 1) {
     int v_line_end = dynamic_h;
-    if (s_active_count == 3) {
-      v_line_end = row_h; // Only first row has 2 cols
+    if ((s_active_count % 2) == 1) {
+      v_line_end = (rows - 1) * row_h; // Last row holds a single full-width field
     }
     graphics_draw_line(ctx, GPoint(bounds.size.w / 2, 5), GPoint(bounds.size.w / 2, v_line_end));
   }
@@ -1277,13 +1277,14 @@ static void layout_dashboard(void) {
   
   int rows = 1, cols = 1;
   if (active_count == 2) { rows = 2; cols = 1; }
-  else if (active_count == 3 || active_count == 4) { rows = 2; cols = 2; }
-  
+  else if (active_count >= 3) { cols = 2; rows = (active_count + 1) / 2; }
+
   int row_h = dynamic_h / rows;
   int col_w = bounds.size.w / cols;
   
   const char* val_font = FONT_ONE_COL;
   if (cols == 2) val_font = FONT_TWO_COL;
+  if (rows >= 3) val_font = FONT_KEY_GOTHIC_18_BOLD;
 
   int current_idx = 0;
   for(int i = 0; i < 10; i++) {
@@ -1296,7 +1297,7 @@ static void layout_dashboard(void) {
     int w = col_w;
     int y = bounds.origin.y + r * row_h;
     
-    if (active_count == 3 && current_idx == 2) {
+    if (cols == 2 && (active_count % 2) == 1 && current_idx == active_count - 1) {
       x = bounds.origin.x;
       w = bounds.size.w;
     }

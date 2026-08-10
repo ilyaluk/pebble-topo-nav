@@ -7,6 +7,9 @@
 - **pypkjs Fake-GPS Patcher:** `tools/patch-pypkjs-gps.py` swaps the emulator's IP-based geolocation for a file-driven one (`~/.pebble-fake-gps`), so the app's real GPS path runs in the emulator with live-movable positions, repeating `watchPosition`, and proper `PositionError` objects.
 
 ### Fixed
+- **Dashboard Broke at 5+ Fields:** The grid only handled 1–4 fields; with 5 (the default), fields overprinted the GPS-coords row and the rest fell off-screen. The grid now scales to any count, giving an odd count's last field the full row width, and the settings page no longer caps the selection at 4.
+- **Hung Tile Fetches Wedged the Map:** Tile downloads had no deadline; one stalled request left the map on "Loading map…" forever with no log output. Fetches now time out after 10s and fail like any other fetch error, and a skipped render logs its reason (map hidden / arrow-only) once per episode.
+- **Custom Tile Server Changes Kept Stale State:** Cached tiles and the render signature were keyed by the source name alone, so all custom URLs shared one namespace — switching servers reused the old server's tiles and often skipped redrawing entirely. Both are now keyed by the URL.
 - **Route IDs Overflowed int32:** New routes got `id: Date.now()` (~1.8e12), which exceeds AppMessage's int32 range; `Pebble.sendAppMessage` then threw on every status send, killing navigation and map updates until storage was wiped. Ids are now masked to 31 bits at creation, and `sendStatusMessage` catches serialization throws so one bad value can no longer take down the GPS callback chain.
 - **Missing `gpsInterval` Persisted as "undefined":** The only setting read without a default now falls back to 5 seconds.
 - **Emulator JS Crash on GPS Failure:** pypkjs delivers geolocation errors without an error object; the unguarded `err.message` access tore down the whole JS runtime.

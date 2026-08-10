@@ -279,9 +279,8 @@
     </select>
 
     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
-      <div data-i18n="dashboardFieldsLabel" style="font-weight: 600; margin-bottom: 5px; font-size: 14px;">Dashboard Data Fields</div>
-      <div data-i18n="dashboardLimit" style="font-size: 12px; color: #666; margin-bottom: 10px;">(Max 4 selectable)</div>
-      
+      <div data-i18n="dashboardFieldsLabel" style="font-weight: 600; margin-bottom: 10px; font-size: 14px;">Dashboard Data Fields</div>
+
       <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: normal;">
         <input type="checkbox" id="field-speed" value="1" class="dashboard-cb" checked style="margin-right: 10px; width: 18px; height: 18px;">
         <span data-i18n="fieldSpeed">Average Speed</span>
@@ -482,8 +481,6 @@
       offlineWarning: "Internetverbindung erforderlich, um Karte zu laden.",
       locale: "de-DE",
       dashboardFieldsLabel: "Dashboard-Datenfelder",
-      dashboardLimit: "(Maximal 4 auswählbar)",
-      maxFields: "Maximal 4 Felder erlaubt.",
       fieldSpeed: "Ø-Geschwindigkeit",
       fieldDist: "Distanz",
       fieldGain: "Höhenmeter Anstieg",
@@ -567,8 +564,6 @@
       offlineWarning: "Internet connection required to load map.",
       locale: "en-US",
       dashboardFieldsLabel: "Dashboard Data Fields",
-      dashboardLimit: "(Max 4 selectable)",
-      maxFields: "Maximum 4 fields allowed.",
       fieldSpeed: "Average Speed",
       fieldDist: "Distance",
       fieldGain: "Elevation Gain",
@@ -1420,32 +1415,6 @@
 
 
 
-  // Checkbox limit logic
-  var maxFields = 4;
-  var dashboardCheckboxes = document.querySelectorAll('.dashboard-cb');
-  
-  function updateCheckboxStates() {
-    var checkedCount = document.querySelectorAll('.dashboard-cb:checked').length;
-    dashboardCheckboxes.forEach(function(cb) {
-      if (!cb.checked) {
-        cb.disabled = (checkedCount >= maxFields);
-      }
-    });
-  }
-  
-  dashboardCheckboxes.forEach(function(cb) {
-    cb.addEventListener('change', function() {
-      var checkedCount = document.querySelectorAll('.dashboard-cb:checked').length;
-      if (checkedCount > maxFields) {
-        this.checked = false; // Revert
-        alert(getTranslations().maxFields);
-      }
-      updateCheckboxStates();
-    });
-  });
-  
-  // Initial state check
-  updateCheckboxStates();
 
   // Apply language at start
   applyLanguage();

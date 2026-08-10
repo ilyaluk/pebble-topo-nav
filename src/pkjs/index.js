@@ -18,6 +18,7 @@ var currentLocation = null;
 var currentLL = null;
 var currentZoom = 17;
 var isSendingMap = false;
+var renderSkipLogged = false; // dedupes the render-skipped log per episode
 // The watch reports whether its map pixels can currently be seen (dashboard,
 // menus and the big-nav popup hide them). While hidden, rendering and
 // streaming frames would burn radio time for pixels nobody sees.
@@ -350,6 +351,16 @@ function getTileUrl(z, x, y) {
     sub = subdomains[Math.floor(Math.random() * 3)];
     return 'https://' + sub + '.tile.opentopomap.org/' + z + '/' + x + '/' + y + '.png';
   }
+}
+
+// All custom servers share the 'custom' mapSource name; namespace cached
+// tiles by URL so switching servers doesn't serve the previous one's tiles.
+function tileNamespace(mapSource) {
+  if (mapSource !== 'custom') return mapSource;
+  var url = localStorage.getItem('customTileUrl') || '';
+  var h = 0;
+  for (var i = 0; i < url.length; i++) h = ((h * 31) + url.charCodeAt(i)) | 0;
+  return 'custom' + (h >>> 0).toString(36);
 }
 
 // Initialize the Pebble application
@@ -1657,7 +1668,7 @@ function getRenderSignature() {
     currentZoom,
     MAP_WIDTH,
     MAP_HEIGHT,
-    localStorage.getItem('mapSource') || 'opentopomap',
+    tileNamespace(localStorage.getItem('mapSource') || 'opentopomap'),
     localStorage.getItem('showBreadcrumbs') !== 'false',
     localStorage.getItem('activeRouteId') || '0',
     closestTrackPointIdx,
@@ -1734,8 +1745,14 @@ function renderAndSendMap() {
   // No map pixels are visible on the watch right now: hidden by the
   // dashboard/menu/popup (reported by the watch) or the user runs in Arrow
   // Only mode, where the watch never draws the map at all.
-  if (!mapVisibleOnWatch) return;
-  if (parseInt(localStorage.getItem('navViewMode') || '0', 10) === 2) return;
+  if (!mapVisibleOnWatch || parseInt(localStorage.getItem('navViewMode') || '0', 10) === 2) {
+    if (!renderSkipLogged) {
+      console.log('Map render skipped: ' + (!mapVisibleOnWatch ? 'map hidden on watch' : 'arrow-only mode'));
+      renderSkipLogged = true;
+    }
+    return;
+  }
+  renderSkipLogged = false;
 
   // 1. Identify which tiles are needed for the current viewport
   var centerPix = graphics.latLonToPixels(currentLocation.lat, currentLocation.lon, currentZoom);
@@ -1764,11 +1781,12 @@ function renderAndSendMap() {
   var tilesToFetch = [];
   var requiredKeys = [];
   var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
+  var tileNs = tileNamespace(mapSource);
 
   for (var tx = tileXMin; tx <= tileXMax; tx++) {
     for (var ty = tileYMin; ty <= tileYMax; ty++) {
       var key = currentZoom + '/' + tx + '/' + ty;
-      var storeKey = 'tile_' + mapSource + '_' + key;
+      var storeKey = 'tile_' + tileNs + '_' + key;
       requiredKeys.push(key);
 
       var memoryTile = getDecodedTile(storeKey);
@@ -1818,7 +1836,7 @@ function renderAndSendMap() {
       xhr.responseType = 'arraybuffer';
       
       xhr.onload = function() {
-        var itemStoreKey = 'tile_' + mapSource + '_' + item.key;
+        var itemStoreKey = 'tile_' + tileNs + '_' + item.key;
         if (xhr.status === 200) {
           try {
             var bytes = new Uint8Array(xhr.response);
@@ -1842,9 +1860,12 @@ function renderAndSendMap() {
       };
       xhr.onerror = function() {
         console.error('Failed to fetch tile: ' + item.key);
-        failedTiles['tile_' + mapSource + '_' + item.key] = Date.now();
+        failedTiles['tile_' + tileNs + '_' + item.key] = Date.now();
         checkCompleted();
       };
+      // Without a deadline a hung fetch leaves isSendingMap true forever
+      xhr.timeout = 10000;
+      xhr.ontimeout = xhr.onerror;
       xhr.send();
     });
   } else {
@@ -2004,7 +2025,7 @@ function cacheTrackTiles(track) {
 
     var mapSource = localStorage.getItem('mapSource') || 'opentopomap';
     var item = tileKeys[idx];
-    var storeKey = 'tile_' + mapSource + '_' + item.key;
+    var storeKey = 'tile_' + tileNamespace(mapSource) + '_' + item.key;
 
     if (localStorage.getItem(storeKey) || tileRecentlyFailed(storeKey)) {
       idx++;
@@ -2037,6 +2058,8 @@ function cacheTrackTiles(track) {
       idx++;
       setTimeout(downloadNext, 120);
     };
+    xhr.timeout = 10000;
+    xhr.ontimeout = xhr.onerror;
     xhr.send();
   }
 
